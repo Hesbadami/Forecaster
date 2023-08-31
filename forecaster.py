@@ -24,6 +24,7 @@ class Forecaster:
         self.target = y
         self.group_features = group_features
         self.categorical_features = categorical_features
+        self.categorical_features += ['dayofweek']
         self.scoring_metric = scoring_metric
 
         self.df[self.date] = pd.to_datetime(self.df[self.date])
