@@ -11,6 +11,7 @@ plt.style.use('bmh')
 from scipy.signal import periodogram
 from statsmodels.tsa.stattools import pacf, acf
 from sklearn import metrics
+from sklearn.preprocessing import LabelEncoder
 from tqdm import tqdm_notebook
 
 class Forecaster:
@@ -151,7 +152,18 @@ class Forecaster:
 
             if lag == False:
 
-                df_valid = pd.get_dummies(df_valid, columns = self.categorical_features)
+                dummy_vars = self.categorical_features.copy()
+                label_encode = []
+                for col in dummy_vars:
+                    if len(df_valid[col].unique()) > 500:
+                        encoder = LabelEncoder()
+                        df_valid[col] = encoder.fit_transform(df_valid[col])
+                        label_encode = []
+
+                for col in label_encode:
+                    dummy_vars.pop(dummy_vars.index(col))
+
+                df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
                 X_train = df_valid[df_valid[self.target].notna()].drop(columns = self.target)
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
@@ -191,7 +203,19 @@ class Forecaster:
             if lag != False:
 
                 df_valid, lags = self.create_lags(df_valid, lag)
-                df_valid = pd.get_dummies(df_valid, columns = self.categorical_features)
+
+                dummy_vars = self.categorical_features.copy()
+                label_encode = []
+                for col in dummy_vars:
+                    if len(df_valid[col].unique()) > 500:
+                        encoder = LabelEncoder()
+                        df_valid[col] = encoder.fit_transform(df_valid[col])
+                        label_encode = []
+
+                for col in label_encode:
+                    dummy_vars.pop(dummy_vars.index(col))
+
+                df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
                 X_train = df_valid[df_valid[self.target].notna()].drop(columns = self.target)
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
@@ -247,7 +271,18 @@ class Forecaster:
 
             if lag == False:
 
-                df_valid = pd.get_dummies(df_valid, columns = self.group_features + self.categorical_features)
+                dummy_vars = (self.group_features + self.categorical_features).copy()
+                label_encode = []
+                for col in dummy_vars:
+                    if len(df_valid[col].unique()) > 500:
+                        encoder = LabelEncoder()
+                        df_valid[col] = encoder.fit_transform(df_valid[col])
+                        label_encode = []
+
+                for col in label_encode:
+                    dummy_vars.pop(dummy_vars.index(col))
+
+                df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
                 X_train = df_valid[df_valid[self.target].notna()].drop(columns = self.target)
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
@@ -288,9 +323,22 @@ class Forecaster:
             if lag != False:
 
                 df_valid, lags = self.create_lags(df_valid, lag)
-                df_valid_dummy = pd.get_dummies(df_valid, columns = self.group_features + self.categorical_features)
+
+                dummy_vars = (self.group_features + self.categorical_features).copy()
+                label_encode = []
+                for col in dummy_vars:
+                    if len(df_valid[col].unique()) > 500:
+                        encoder = LabelEncoder()
+                        df_valid[col] = encoder.fit_transform(df_valid[col])
+                        label_encode = []
+
+                for col in label_encode:
+                    dummy_vars.pop(dummy_vars.index(col))
+
+                df_valid_dummy = pd.get_dummies(df_valid, columns = dummy_vars)
                 for feature in self.group_features:
-                    df_valid_dummy[feature] = df_valid[feature]
+                    if feature in dummy_vars:
+                        df_valid_dummy[feature] = df_valid[feature]
 
                 df_valid = df_valid_dummy
                 del df_valid_dummy
@@ -369,7 +417,18 @@ class Forecaster:
 
                 if lag == False:
 
-                    df_valid = pd.get_dummies(df_valid, columns = self.categorical_features)
+                    dummy_vars = (self.categorical_features).copy()
+                    label_encode = []
+                    for col in dummy_vars:
+                        if len(df_valid[col].unique()) > 500:
+                            encoder = LabelEncoder()
+                            df_valid[col] = encoder.fit_transform(df_valid[col])
+                            label_encode = []
+
+                    for col in label_encode:
+                        dummy_vars.pop(dummy_vars.index(col))
+
+                    df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
                     X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = self.target)
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
@@ -396,7 +455,19 @@ class Forecaster:
                 if lag != False:
 
                     df_valid, lags = self.create_lags(df_valid, lag)
-                    df_valid = pd.get_dummies(df_valid, columns = self.categorical_features)
+
+                    dummy_vars = (self.categorical_features).copy()
+                    label_encode = []
+                    for col in dummy_vars:
+                        if len(df_valid[col].unique()) > 500:
+                            encoder = LabelEncoder()
+                            df_valid[col] = encoder.fit_transform(df_valid[col])
+                            label_encode = []
+
+                    for col in label_encode:
+                        dummy_vars.pop(dummy_vars.index(col))
+
+                    df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
                     X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = self.target)
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
@@ -458,7 +529,7 @@ class Forecaster:
 
             return y_pred.reset_index(), scores
 
-        if len(by) == 1 and len(self.group_features) == 2:
+        if len(by) == 1 and len(self.group_features):
 
             gr_1 = by
             gr_2 = self.group_features.copy()
@@ -482,7 +553,18 @@ class Forecaster:
 
                 if lag == False:
 
-                    df_valid = pd.get_dummies(df_valid, columns = gr_2 + self.categorical_features)
+                    dummy_vars = (gr_2 + self.categorical_features).copy()
+                    label_encode = []
+                    for col in dummy_vars:
+                        if len(df_valid[col].unique()) > 500:
+                            encoder = LabelEncoder()
+                            df_valid[col] = encoder.fit_transform(df_valid[col])
+                            label_encode = []
+
+                    for col in label_encode:
+                        dummy_vars.pop(dummy_vars.index(col))                   
+
+                    df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
                     X_train = df_valid.drop(columns = by)[df_valid[self.target].notna()].drop(columns = self.target)
                     y_train = df_valid.drop(columns = by)[df_valid[self.target].notna()][self.target]
@@ -510,7 +592,19 @@ class Forecaster:
                 if lag != False:
 
                     df_valid, lags = self.create_lags(df_valid, lag)
-                    df_valid_dummy = pd.get_dummies(df_valid, columns = gr_2 + self.categorical_features)
+
+                    dummy_vars = (gr_2 + self.categorical_features).copy()
+                    label_encode = []
+                    for col in dummy_vars:
+                        if len(df_valid[col].unique()) > 500:
+                            encoder = LabelEncoder()
+                            df_valid[col] = encoder.fit_transform(df_valid[col])
+                            label_encode = []
+
+                    for col in label_encode:
+                        dummy_vars.pop(dummy_vars.index(col))
+
+                    df_valid_dummy = pd.get_dummies(df_valid, columns = dummy_vars)
 
                     for feature in gr_2:
                         df_valid_dummy[feature] = df_valid[feature]
@@ -617,7 +711,18 @@ class Forecaster:
 
             if lag == False:
 
-                df_valid = pd.get_dummies(df_valid, columns = self.categorical_features)
+                dummy_vars = (self.categorical_features).copy()
+                label_encode = []
+                for col in dummy_vars:
+                    if len(df_valid[col].unique()) > 500:
+                        encoder = LabelEncoder()
+                        df_valid[col] = encoder.fit_transform(df_valid[col])
+                        label_encode = []
+
+                for col in label_encode:
+                    dummy_vars.pop(dummy_vars.index(col))
+
+                df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
                 X_train = df_valid[df_valid[self.target].notna()].drop(columns = self.target)
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
@@ -655,7 +760,19 @@ class Forecaster:
             if lag != False:
 
                 df_valid, lags = self.create_lags(df_valid, lag)
-                df_valid = pd.get_dummies(df_valid, columns = self.categorical_features)
+
+                dummy_vars = (self.categorical_features).copy()
+                label_encode = []
+                for col in dummy_vars:
+                    if len(df_valid[col].unique()) > 500:
+                        encoder = LabelEncoder()
+                        df_valid[col] = encoder.fit_transform(df_valid[col])
+                        label_encode = []
+
+                for col in label_encode:
+                    dummy_vars.pop(dummy_vars.index(col))
+
+                df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
                 X_train = df_valid[df_valid[self.target].notna()].drop(columns = self.target)
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
@@ -707,7 +824,18 @@ class Forecaster:
 
             if lag == False:
 
-                df_valid = pd.get_dummies(df_valid, columns = self.group_features + self.categorical_features)
+                dummy_vars = (self.group_features + self.categorical_features).copy()
+                label_encode = []
+                for col in dummy_vars:
+                    if len(df_valid[col].unique()) > 500:
+                        encoder = LabelEncoder()
+                        df_valid[col] = encoder.fit_transform(df_valid[col])
+                        label_encode.append(col)
+
+                for col in label_encode:
+                    dummy_vars.pop(dummy_vars.index(col))          
+
+                df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
                 X_train = df_valid[df_valid[self.target].notna()].drop(columns = self.target)
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
@@ -746,7 +874,19 @@ class Forecaster:
             if lag != False:
 
                 df_valid, lags = self.create_lags(df_valid, lag)
-                df_valid_dummy = pd.get_dummies(df_valid, columns = self.group_features + self.categorical_features)
+
+                dummy_vars = (self.group_features + self.categorical_features).copy()
+                label_encode = []
+                for col in dummy_vars:
+                    if len(df_valid[col].unique()) > 500:
+                        encoder = LabelEncoder()
+                        df_valid[col] = encoder.fit_transform(df_valid[col])
+                        label_encode = []
+
+                for col in label_encode:
+                    dummy_vars.pop(dummy_vars.index(col))
+
+                df_valid_dummy = pd.get_dummies(df_valid, columns = dummy_vars)
                 for feature in self.group_features:
                     df_valid_dummy[feature] = df_valid[feature]
 
@@ -813,7 +953,7 @@ class Forecaster:
             y_preds = []
             y_trains = []
 
-            for group in tqdm_notebook(self.df.groupby(self.group_features)):
+            for group in tqdm_notebook(data.groupby(self.group_features)):
 
                 df_valid = group[1].set_index(self.date)
 
@@ -822,7 +962,18 @@ class Forecaster:
 
                 if lag == False:
 
-                    df_valid = pd.get_dummies(df_valid, columns = self.categorical_features)
+                    dummy_vars = (self.categorical_features).copy()
+                    label_encode = []
+                    for col in dummy_vars:
+                        if len(df_valid[col].unique()) > 500:
+                            encoder = LabelEncoder()
+                            df_valid[col] = encoder.fit_transform(df_valid[col])
+                            label_encode = []
+
+                    for col in label_encode:
+                        dummy_vars.pop(dummy_vars.index(col))                    
+
+                    df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
                     X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = self.target)
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
@@ -848,7 +999,19 @@ class Forecaster:
                 if lag != False:
 
                     df_valid, lags = self.create_lags(df_valid, lag)
-                    df_valid = pd.get_dummies(df_valid, columns = self.categorical_features)
+
+                    dummy_vars = (self.categorical_features).copy()
+                    label_encode = []
+                    for col in dummy_vars:
+                        if len(df_valid[col].unique()) > 500:
+                            encoder = LabelEncoder()
+                            df_valid[col] = encoder.fit_transform(df_valid[col])
+                            label_encode = []
+
+                    for col in label_encode:
+                        dummy_vars.pop(dummy_vars.index(col))
+
+                    df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
                     X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = self.target)
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
@@ -917,7 +1080,7 @@ class Forecaster:
             y_preds = []
             y_trains = []
 
-            for group in tqdm_notebook(self.df.groupby(gr_1)):
+            for group in tqdm_notebook(data.groupby(gr_1)):
 
                 df_valid = group[1].set_index(self.date)
 
@@ -926,7 +1089,18 @@ class Forecaster:
 
                 if lag == False:
 
-                    df_valid = pd.get_dummies(df_valid, columns = gr_2 + self.categorical_features)
+                    dummy_vars = (gr_2 + self.categorical_features).copy()
+                    label_encode = []
+                    for col in dummy_vars:
+                        if len(df_valid[col].unique()) > 500:
+                            encoder = LabelEncoder()
+                            df_valid[col] = encoder.fit_transform(df_valid[col])
+                            label_encode = []
+
+                    for col in label_encode:
+                        dummy_vars.pop(dummy_vars.index(col))
+
+                    df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
                     X_train = df_valid.drop(columns = by)[df_valid[self.target].notna()].drop(columns = self.target)
                     y_train = df_valid.drop(columns = by)[df_valid[self.target].notna()][self.target]
@@ -953,7 +1127,19 @@ class Forecaster:
                 if lag != False:
 
                     df_valid, lags = self.create_lags(df_valid, lag)
-                    df_valid_dummy = pd.get_dummies(df_valid, columns = gr_2 + self.categorical_features)
+
+                    dummy_vars = (gr_2 + self.categorical_features).copy()
+                    label_encode = []
+                    for col in dummy_vars:
+                        if len(df_valid[col].unique()) > 500:
+                            encoder = LabelEncoder()
+                            df_valid[col] = encoder.fit_transform(df_valid[col])
+                            label_encode = []
+
+                    for col in label_encode:
+                        dummy_vars.pop(dummy_vars.index(col))
+
+                    df_valid_dummy = pd.get_dummies(df_valid, columns = dummy_vars)
 
                     for feature in gr_2:
                         df_valid_dummy[feature] = df_valid[feature]
