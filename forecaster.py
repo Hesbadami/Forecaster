@@ -32,24 +32,24 @@ class Forecaster:
     def make_future_dataframe(self, periods, fill_zero = []):
 
         future = pd.DataFrame()
-        
+
         start_date = self.df[self.date].iloc[-1] + self.time_delta
         end_date = start_date + (periods * self.time_delta)
         date_range = pd.date_range(start_date, end_date, freq = self.time_delta)
-        
+
         to_copy = self.df[self.df[self.date] == self.df[self.date].iloc[-1]].copy()
-        
+
         for date in date_range:
             to_copy[self.date] = date
-            
+
             # to_copy[to_copy.columns.drop([self.id_, self.date, 'date_index', *self.group_features, *self.categorical_features])] = 0
             to_copy[fill_zero] = 0
             to_copy[self.target] = np.nan
 
             future = pd.concat([future, to_copy])
-            
+
         self.df = pd.concat([self.df, future]).reset_index(drop = True)
-    
+
     def create_seasonality(self, data):
 
         ret = pd.DataFrame()
@@ -96,7 +96,7 @@ class Forecaster:
                     ret[f'lag_{lag}'] = data[self.target].shift(lag)
 
             ret = pd.concat([data, ret], axis = 1)
-            
+
             nan_head = ret.index[0] + (lags[-1] * self.time_delta)
 
             ret = ret[nan_head:]
@@ -581,10 +581,10 @@ class Forecaster:
             return y_pred.reset_index(), scores
 
 
-    def forecast(self, model, seasonality = False, lag = False, by = None, plot = False):
+    def predict(self, model, seasonality = False, lag = False, by = None, plot = False):
 
         model_name = str(model).split(".")[-1].split("'")[0]
-        
+
         data = self.df.copy()
 
         if not self.keep_id:
@@ -604,7 +604,7 @@ class Forecaster:
         model_name = str(model).split(".")[-1].split("'")[0]
 
         df_valid = data.set_index(self.date)
-        
+
         if len(self.group_features) == 0:
 
             if seasonality:
