@@ -67,7 +67,7 @@ y_valid, scores = model.validate(
 The predict method will assign each row with a missing value, a predicted value.
 
 ```python
-forecast, scores = model.forecast(
+forecast, scores = model.predict(
     Ridge, 
     seasonality = True, 
     lag = True, 
