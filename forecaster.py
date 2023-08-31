@@ -124,7 +124,7 @@ class Forecaster:
         n = len(dates)
         split_date = dates[int(n*split)]
 
-        X_valid = data.dropna()
+        X_valid = data[data[self.target].notna()]
 
         y_valid = X_valid.loc[split_date:].sort_values(by = [self.date, self.id_])[self.target].copy()
         X_valid.loc[split_date:, self.target] = np.nan
@@ -273,7 +273,6 @@ class Forecaster:
                     plt.show()
 
                 if self.id_:
-                    y_pred_w_id = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred}, index = y_pred.index)
                     return y_pred_w_id, scores
 
                 return y_pred, scores
@@ -447,7 +446,6 @@ class Forecaster:
                 plt.show()
 
             if self.id_:
-                y_pred_w_id = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred}, index = y_pred.index)
                 return y_pred_w_id, scores
 
             return y_pred, scores
@@ -575,7 +573,6 @@ class Forecaster:
                 plt.show()
 
             if self.id_:
-                y_pred_w_id = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred}, index = y_pred.index)
                 return y_pred_w_id, scores
 
             return y_pred, scores
@@ -715,7 +712,6 @@ class Forecaster:
                     plt.show()
 
                 if self.id_:
-                    y_pred_w_id = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred}, index = y_pred.index)
                     return y_pred_w_id, scores
 
                 return y_pred, scores
@@ -877,7 +873,6 @@ class Forecaster:
                 plt.show()
 
             if self.id_:
-                y_pred_w_id = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred}, index = y_pred.index)
                 return y_pred_w_id, scores
 
             return y_pred, scores
@@ -996,7 +991,6 @@ class Forecaster:
                 plt.show()
 
             if self.id_:
-                y_pred_w_id = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred}, index = y_pred.index)
                 return y_pred_w_id, scores
 
             return y_pred, scores
