@@ -15,18 +15,18 @@ from tqdm import tqdm_notebook
 
 class Forecaster:
 
-    def __init__(self, df, date_and_target, group_features = [], categorical_features = [], scoring_metric = metrics.mean_squared_error, id_ = None):
+    def __init__(self, df, x, y, group_features = [], categorical_features = [], scoring_metric = metrics.mean_absolute_percentage_error, keep_id = False):
         self.df = df
 
-        self.id_ = id_
-        if not self.id_:
-            self.id_ = 'id'
-            self.df['id'] = 0
+        self.keep_id = keep_id
 
-        self.date, self.target = date_and_target
+        self.date = x
+        self.target = y
         self.group_features = group_features
         self.categorical_features = categorical_features
         self.scoring_metric = scoring_metric
+
+        self.df[self.date] = pd.to_datetime(self.df[self.date])
         self.time_delta = pd.Timedelta(self.df[self.date].unique()[1] - self.df[self.date].unique()[0])
 
     def make_future_dataframe(self, periods, fill_zero = []):
@@ -35,34 +35,20 @@ class Forecaster:
         
         start_date = self.df[self.date].iloc[-1] + self.time_delta
         end_date = start_date + (periods * self.time_delta)
-        date_range = pd.date_range(start_date)
+        date_range = pd.date_range(start_date, end_date, freq = self.time_delta)
         
         to_copy = self.df[self.df[self.date] == self.df[self.date].iloc[-1]].copy()
         
         for date in date_range:
             to_copy[self.date] = date
-            to_copy['date_index'] += 1
             
             # to_copy[to_copy.columns.drop([self.id_, self.date, 'date_index', *self.group_features, *self.categorical_features])] = 0
             to_copy[fill_zero] = 0
-            
-            for col in to_copy.columns:
-                if col.lower() == 'year':
-                    to_copy[col] = to_copy[self.date].dt.year
-                if col.lower() == 'month':
-                    to_copy[col] = to_copy[self.date].dt.month
-                if col.lower() in ['day_of_week', 'dayofweek']:
-                    to_copy[col] = to_copy[self.date].dt.dayofweek
-                if col.lower() in ['day_of_month', 'dayofmonth']:
-                    to_copy[col] = to_copy[self.date].dt.day
-                if col.lower() in ['day_of_year', 'dayofyear']:
-                    to_copy[col] = to_copy[self.date].dt.dayofyear
-                if col.lower() in ['week_of_year', 'weekofyear', 'week']:
-                    to_copy[col] = to_copy[self.date].dt.isocalendar().week.astype(int)
-            
+            to_copy[self.target] = np.nan
+
             future = pd.concat([future, to_copy])
             
-        self.df = pd.concat([future, self.df])
+        self.df = pd.concat([self.df, future]).reset_index(drop = True)
     
     def create_seasonality(self, data):
 
@@ -110,6 +96,7 @@ class Forecaster:
                     ret[f'lag_{lag}'] = data[self.target].shift(lag)
 
             ret = pd.concat([data, ret], axis = 1)
+            
             nan_head = ret.index[0] + (lags[-1] * self.time_delta)
 
             ret = ret[nan_head:]
@@ -133,10 +120,26 @@ class Forecaster:
 
     def validate(self, model, seasonality = False, lag = False, by = None, plot = False):
 
+        data = self.df[self.df[self.target].notna()].copy()
+
+        if not self.keep_id:
+            self.id_ = 'id'
+            data['id'] = 0
+
+        if self.keep_id:
+            self.id_ = self.keep_id
+        data['hour'] = data[self.date].dt.hour
+        data['year'] = data[self.date].dt.year
+        data['month'] = data[self.date].dt.month
+        data['dayofweek'] = data[self.date].dt.dayofweek
+        data['dayofmonth'] = data[self.date].dt.day
+        data["dayofyear"] = data[self.date].dt.dayofyear
+        data["weekofyear"] = data[self.date].dt.isocalendar().week.astype(int)
+        data['date_index'] = data[self.date].factorize()[0]
         model_name = str(model).split(".")[-1].split("'")[0]
 
         if len(self.group_features) == 0:
-            df_valid , y_valid = self.train_valid_split(self.df[self.df[self.target].notna()].set_index(self.date))
+            df_valid , y_valid = self.train_valid_split(data.set_index(self.date))
 
             if seasonality:
                 df_valid = self.create_seasonality(df_valid)
@@ -174,11 +177,11 @@ class Forecaster:
                     plt.tight_layout()
                     plt.show()
 
-                if self.id_:
+                if self.keep_id:
                     y_pred_w_id = pd.DataFrame({self.id_: X_valid[id_], self.target: y_pred}, index = y_pred.index)
                     return y_pred_w_id, scores
 
-                return y_pred, scores
+                return y_pred.reset_index(), scores
 
             if lag != False:
 
@@ -226,13 +229,13 @@ class Forecaster:
                     plt.tight_layout()
                     plt.show()
 
-                if self.id_:
+                if self.keep_id:
                     return y_pred_w_id, scores
 
-                return y_pred, scores
+                return y_pred.reset_index(), scores
 
         if by == None and len(self.group_features):
-            df_valid , y_valid = self.train_valid_split(self.df[self.df[self.target].notna()].set_index(self.date))
+            df_valid , y_valid = self.train_valid_split(data.set_index(self.date))
 
             if seasonality:
                 df_valid = self.create_seasonality(df_valid)
@@ -272,10 +275,10 @@ class Forecaster:
                     plt.tight_layout()
                     plt.show()
 
-                if self.id_:
+                if self.keep_id:
                     return y_pred_w_id, scores
 
-                return y_pred, scores
+                return y_pred.reset_index(), scores
 
             if lag != False:
 
@@ -336,10 +339,10 @@ class Forecaster:
                     plt.tight_layout()
                     plt.show()
 
-                if self.id_:
+                if self.keep_id:
                     return y_pred_w_id, scores
 
-                return y_pred, scores
+                return y_pred.reset_index(), scores
 
         if len(by) == len(self.group_features):
 
@@ -351,7 +354,7 @@ class Forecaster:
             y_trains = []
             y_valids = []
 
-            for group in tqdm_notebook(self.df.groupby(self.group_features)):
+            for group in tqdm_notebook(data.groupby(self.group_features)):
 
                 df_valid , y_valid = self.train_valid_split(group[1][group[1][self.target].notna()].set_index(self.date))
                 y_valids.append(y_valid)
@@ -445,10 +448,10 @@ class Forecaster:
                 plt.tight_layout()
                 plt.show()
 
-            if self.id_:
+            if self.keep_id:
                 return y_pred_w_id, scores
 
-            return y_pred, scores
+            return y_pred.reset_index(), scores
 
         if len(by) == 1 and len(self.group_features) == 2:
 
@@ -464,7 +467,7 @@ class Forecaster:
             y_trains = []
             y_valids = []
 
-            for group in tqdm_notebook(self.df.groupby(gr_1)):
+            for group in tqdm_notebook(data.groupby(gr_1)):
 
                 df_valid , y_valid = self.train_valid_split(group[1][group[1][self.target].notna()].set_index(self.date))
                 y_valids.append(y_valid)
@@ -572,17 +575,36 @@ class Forecaster:
                 plt.tight_layout()
                 plt.show()
 
-            if self.id_:
+            if self.keep_id:
                 return y_pred_w_id, scores
 
-            return y_pred, scores
+            return y_pred.reset_index(), scores
 
 
     def forecast(self, model, seasonality = False, lag = False, by = None, plot = False):
 
         model_name = str(model).split(".")[-1].split("'")[0]
-        df_valid = self.df.copy().set_index(self.date)
+        
+        data = self.df.copy()
 
+        if not self.keep_id:
+            self.id_ = 'id'
+            data['id'] = 0
+
+        if self.keep_id:
+            self.id_ = self.keep_id
+        data['hour'] = data[self.date].dt.hour
+        data['year'] = data[self.date].dt.year
+        data['month'] = data[self.date].dt.month
+        data['dayofweek'] = data[self.date].dt.dayofweek
+        data['dayofmonth'] = data[self.date].dt.day
+        data["dayofyear"] = data[self.date].dt.dayofyear
+        data["weekofyear"] = data[self.date].dt.isocalendar().week.astype(int)
+        data['date_index'] = data[self.date].factorize()[0]
+        model_name = str(model).split(".")[-1].split("'")[0]
+
+        df_valid = data.set_index(self.date)
+        
         if len(self.group_features) == 0:
 
             if seasonality:
@@ -619,11 +641,11 @@ class Forecaster:
                     plt.tight_layout()
                     plt.show()
 
-                if self.id_:
+                if self.keep_id:
                     y_pred_w_id = pd.DataFrame({self.id_: X_valid[id_], self.target: y_pred}, index = y_pred.index)
                     return y_pred_w_id, scores
 
-                return y_pred, scores
+                return y_pred.reset_index(), scores
 
             if lag != False:
 
@@ -668,10 +690,10 @@ class Forecaster:
                     plt.tight_layout()
                     plt.show()
 
-                if self.id_:
+                if self.keep_id:
                     return y_pred_w_id, scores
 
-                return y_pred, scores
+                return y_pred.reset_index(), scores
 
         if by == None and len(self.group_features):
 
@@ -711,10 +733,10 @@ class Forecaster:
                     plt.tight_layout()
                     plt.show()
 
-                if self.id_:
+                if self.keep_id:
                     return y_pred_w_id, scores
 
-                return y_pred, scores
+                return y_pred.reset_index(), scores
 
             if lag != False:
 
@@ -772,10 +794,10 @@ class Forecaster:
                     plt.tight_layout()
                     plt.show()
 
-                if self.id_:
+                if self.keep_id:
                     return y_pred_w_id, scores
 
-                return y_pred, scores
+                return y_pred.reset_index(), scores
 
         if len(by) == len(self.group_features):
 
@@ -872,10 +894,10 @@ class Forecaster:
                 plt.tight_layout()
                 plt.show()
 
-            if self.id_:
+            if self.keep_id:
                 return y_pred_w_id, scores
 
-            return y_pred, scores
+            return y_pred.reset_index(), scores
 
         if len(by) == 1 and len(self.group_features) == 2:
 
@@ -990,7 +1012,7 @@ class Forecaster:
                 plt.tight_layout()
                 plt.show()
 
-            if self.id_:
+            if self.keep_id:
                 return y_pred_w_id, scores
 
-            return y_pred, scores
+            return y_pred.reset_index(), scores
