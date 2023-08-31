@@ -97,7 +97,11 @@ class Forecaster:
 
             ret = pd.concat([data, ret], axis = 1)
 
-            nan_head = ret.index[0] + (lags[-1] * self.time_delta)
+            if len(self.group_features):
+                nan_head = ret.index[0] + (lags[-1] * self.time_delta)
+
+            elif len(self.group_features) == 0:
+                nan_head = ret.index[lags[-1]]
 
             ret = ret[nan_head:]
 
