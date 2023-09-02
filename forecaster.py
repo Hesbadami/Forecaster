@@ -73,8 +73,9 @@ class Forecaster:
         Seasonality = dict(zip(names, np.round(fs / freqs, 1)))
 
         for s in Seasonality:
-            ret[f'sin_{s}'] = np.sin(data['date_index'] * (2*np.pi / Seasonality[s]))
-            ret[f'cos_{s}'] = np.cos(data['date_index'] * (2*np.pi / Seasonality[s]))
+            if Seasonality[s]>1:
+                ret[f'sin_{s}'] = np.sin(data['date_index'] * (2*np.pi / Seasonality[s]))
+                ret[f'cos_{s}'] = np.cos(data['date_index'] * (2*np.pi / Seasonality[s]))
         return pd.concat([data, ret], axis = 1)
 
     def create_lags(self, data, lags = True):
@@ -123,7 +124,7 @@ class Forecaster:
 
         return X_valid, y_valid
 
-    def validate(self, model, seasonality = False, lag = False, by = None, plot = False):
+    def validate(self, model, seasonality = False, lag = False, by = None, plot = False, model_kwargs = {}):
 
         data = self.df[self.df[self.target].notna()].copy()
 
@@ -169,8 +170,7 @@ class Forecaster:
 
                 X_valid = df_valid[df_valid[self.target].isna()].drop(columns = self.target)
 
-                model_ = model()
-                
+                model_ = model(**model_kwargs)
                 model_.fit(X_train.drop(columns = self.id_), y_train)
 
                 y_pred = model_.predict(X_valid.drop(columns = self.id_))
@@ -220,7 +220,7 @@ class Forecaster:
                 X_train = df_valid[df_valid[self.target].notna()].drop(columns = self.target)
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
                 
-                model_ = model()
+                model_ = model(**model_kwargs)
                 model_.fit(X_train.drop(columns = self.id_), y_train)
 
                 y_train_pred = model_.predict(X_train.drop(columns = self.id_))
@@ -295,7 +295,7 @@ class Forecaster:
 
                 X_valid = df_valid[df_valid[self.target].isna()].drop(columns = self.target)
 
-                model_ = model()
+                model_ = model(**model_kwargs)
                 model_.fit(X_train.drop(columns = self.id_), y_train)
 
                 y_pred = model_.predict(X_valid.drop(columns = self.id_))
@@ -352,7 +352,7 @@ class Forecaster:
                 X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = self.target)
                 y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
 
-                model_ = model()
+                model_ = model(**model_kwargs)
                 model_.fit(X_train.drop(columns = self.id_), y_train)
 
                 y_train_pred = model_.predict(X_train.drop(columns = self.id_))
@@ -448,7 +448,7 @@ class Forecaster:
 
                     X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = self.target)
 
-                    models[group[0]] = model()
+                    models[group[0]] = model(**model_kwargs)
                     models[group[0]].fit(X_train.drop(columns = self.id_), y_train)
 
                     y_pred_ = models[group[0]].predict(X_valid.drop(columns = self.id_))
@@ -487,7 +487,7 @@ class Forecaster:
 
                     X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = self.target)
 
-                    models[group[0]] = model()
+                    models[group[0]] = model(**model_kwargs)
                     models[group[0]].fit(X_train.drop(columns = self.id_), y_train)
 
                     y_train_pred = models[group[0]].predict(X_train.drop(columns = self.id_))
@@ -590,7 +590,7 @@ class Forecaster:
 
                     X_valid = df_valid.drop(columns = by)[df_valid[self.target].isna()].drop(columns = self.target)
 
-                    models[group[0]] = model()
+                    models[group[0]] = model(**model_kwargs)
                     models[group[0]].fit(X_train.drop(columns = self.id_), y_train)
 
                     y_pred_ = models[group[0]].predict(X_valid.drop(columns = self.id_))
@@ -634,7 +634,7 @@ class Forecaster:
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
                     y_trains.append(y_train)
 
-                    models[group[0]] = model()
+                    models[group[0]] = model(**model_kwargs)
                     models[group[0]].fit(X_train.drop(columns = self.id_), y_train)
 
                     y_train_pred = models[group[0]].predict(X_train.drop(columns = self.id_))
@@ -704,7 +704,7 @@ class Forecaster:
             return y_pred.reset_index(), scores
 
 
-    def predict(self, model, seasonality = False, lag = False, by = None, plot = False):
+    def predict(self, model, seasonality = False, lag = False, by = None, plot = False, model_kwargs = {}):
 
         model_name = str(model).split(".")[-1].split("'")[0]
 
@@ -753,7 +753,7 @@ class Forecaster:
 
                 X_valid = df_valid[df_valid[self.target].isna()].drop(columns = self.target)
 
-                model_ = model()
+                model_ = model(**model_kwargs)
                 model_.fit(X_train.drop(columns = self.id_), y_train)
 
                 y_pred = model_.predict(X_valid.drop(columns = self.id_))
@@ -801,7 +801,7 @@ class Forecaster:
                 X_train = df_valid[df_valid[self.target].notna()].drop(columns = self.target)
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
 
-                model_ = model()
+                model_ = model(**model_kwargs)
                 model_.fit(X_train.drop(columns = self.id_), y_train)
 
                 y_train_pred = model_.predict(X_train.drop(columns = self.id_))
@@ -872,7 +872,7 @@ class Forecaster:
 
                 X_valid = df_valid[df_valid[self.target].isna()].drop(columns = self.target)
 
-                model_ = model()
+                model_ = model(**model_kwargs)
                 model_.fit(X_train.drop(columns = self.id_), y_train)
 
                 y_pred = model_.predict(X_valid.drop(columns = self.id_))
@@ -926,7 +926,7 @@ class Forecaster:
                 X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = self.target)
                 y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
 
-                model_ = model()
+                model_ = model(**model_kwargs)
                 model_.fit(X_train.drop(columns = self.id_), y_train)
 
                 y_train_pred = model_.predict(X_train.drop(columns = self.id_))
@@ -1017,7 +1017,7 @@ class Forecaster:
 
                     X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = self.target)
 
-                    models[group[0]] = model()
+                    models[group[0]] = model(**model_kwargs)
                     models[group[0]].fit(X_train.drop(columns = self.id_), y_train)
 
                     y_pred_ = models[group[0]].predict(X_valid.drop(columns = self.id_))
@@ -1055,7 +1055,7 @@ class Forecaster:
 
                     X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = self.target)
 
-                    models[group[0]] = model()
+                    models[group[0]] = model(**model_kwargs)
                     models[group[0]].fit(X_train.drop(columns = self.id_), y_train)
 
                     y_train_pred = models[group[0]].predict(X_train.drop(columns = self.id_))
@@ -1150,7 +1150,7 @@ class Forecaster:
 
                     X_valid = df_valid.drop(columns = by)[df_valid[self.target].isna()].drop(columns = self.target)
 
-                    models[group[0]] = model()
+                    models[group[0]] = model(**model_kwargs)
                     models[group[0]].fit(X_train.drop(columns = self.id_), y_train)
 
                     y_pred_ = models[group[0]].predict(X_valid.drop(columns = self.id_))
@@ -1193,7 +1193,7 @@ class Forecaster:
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
                     y_trains.append(y_train)
 
-                    models[group[0]] = model()
+                    models[group[0]] = model(**model_kwargs)
                     models[group[0]].fit(X_train.drop(columns = self.id_), y_train)
 
                     y_train_pred = models[group[0]].predict(X_train.drop(columns = self.id_))
