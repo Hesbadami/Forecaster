@@ -98,12 +98,8 @@ class Forecaster:
                     ret[f'lag_{lag}'] = data[self.target].shift(lag)
 
             ret = pd.concat([data, ret], axis = 1)
-
-            if len(self.group_features):
-                nan_head = ret.index[0] + (lags[-1] * self.time_delta)
-
-            elif len(self.group_features) == 0:
-                nan_head = ret.index[lags[-1]]
+            ret.index.unique()[lags[-1]]
+            nan_head = ret.index.unique()[lags[-1]]
 
             ret = ret[nan_head:]
 
@@ -236,8 +232,11 @@ class Forecaster:
                     future_1 = model_.predict(future_X.drop(columns = self.id_))[0]
 
                     df_valid.loc[future_index, self.target] = future_1
+
+                    unique_dates = pd.Series(df_valid[self.date].unique())
+                    unique_index = np.where(unique_dates == future_index)[0][0]
                     for lag_ in lags:
-                        df_valid.loc[future_index + (lag_ * self.time_delta), f'lag_{lag_}'] = future_1
+                        df_valid.loc[unique_index + lag_, f'lag_{lag_}'] = future_1
 
                 y_pred_w_id = df_valid.loc[forecast_index, [self.id_, self.target]].copy()
                 y_pred_w_id.loc[y_pred_w_id[self.target] < 0, self.target] = 0
@@ -368,8 +367,11 @@ class Forecaster:
                         future_1 = model_.predict(future_X.drop(columns = [self.id_, *self.group_features]))[0]
 
                         df_group.loc[future_index, self.target] = future_1
+
+                        unique_dates = pd.Series(df_group[self.date].unique())
+                        unique_index = np.where(unique_dates == future_index)[0][0]
                         for lag_ in lags:
-                            df_group.loc[future_index + (lag_ * self.time_delta), f'lag_{lag_}'] = future_1
+                            df_group.loc[unique_index + lag_, f'lag_{lag_}'] = future_1                        
 
                     y_pred_w_ids.append(df_group.loc[forecast_index, [self.id_, self.target]].copy())
 
@@ -491,8 +493,11 @@ class Forecaster:
                         future_1 = models[group[0]].predict(future_X.drop(columns = [self.id_, *self.group_features]))[0]
 
                         df_valid.loc[future_index, self.target] = future_1
+
+                        unique_dates = pd.Series(df_valid[self.date].unique())
+                        unique_index = np.where(unique_dates == future_index)[0][0]
                         for lag_ in lags:
-                            df_valid.loc[future_index + (lag_ * self.time_delta), f'lag_{lag_}'] = future_1
+                            df_valid.loc[unique_index + lag_, f'lag_{lag_}'] = future_1  
 
                     y_pred_w_id_ = df_valid.loc[forecast_index, [self.id_, self.target]].copy()
                     y_pred_w_id_.loc[y_pred_w_id_[self.target] < 0, self.target] = 0
@@ -638,8 +643,11 @@ class Forecaster:
                             future_1 = models[group[0]].predict(future_X.drop(columns = [self.id_, *self.group_features]))[0]
 
                             df_group.loc[future_index, self.target] = future_1
+
+                            unique_dates = pd.Series(df_group[self.date].unique())
+                            unique_index = np.where(unique_dates == future_index)[0][0]
                             for lag_ in lags:
-                                df_group.loc[future_index + (lag_ * self.time_delta), f'lag_{lag_}'] = future_1
+                                df_group.loc[unique_index + lag_, f'lag_{lag_}'] = future_1  
 
                         y_pred_w_id__ = df_group.loc[forecast_index, [self.id_, self.target]].copy()
                         y_pred_w_ids_.append(y_pred_w_id__)
@@ -793,8 +801,11 @@ class Forecaster:
                     future_1 = model_.predict(future_X.drop(columns = self.id_))[0]
 
                     df_valid.loc[future_index, self.target] = future_1
+
+                    unique_dates = pd.Series(df_valid[self.date].unique())
+                    unique_index = np.where(unique_dates == future_index)[0][0]
                     for lag_ in lags:
-                        df_valid.loc[future_index + (lag_ * self.time_delta), f'lag_{lag_}'] = future_1
+                        df_valid.loc[unique_index + lag_, f'lag_{lag_}'] = future_1     
 
                 y_pred_w_id = df_valid.loc[forecast_index, [self.id_, self.target]].copy()
                 y_pred_w_id.loc[y_pred_w_id[self.target] < 0, self.target] = 0
@@ -918,8 +929,11 @@ class Forecaster:
                         future_1 = model_.predict(future_X.drop(columns = [self.id_, *self.group_features]))[0]
 
                         df_group.loc[future_index, self.target] = future_1
+
+                        unique_dates = pd.Series(df_group[self.date].unique())
+                        unique_index = np.where(unique_dates == future_index)[0][0]
                         for lag_ in lags:
-                            df_group.loc[future_index + (lag_ * self.time_delta), f'lag_{lag_}'] = future_1
+                            df_group.loc[unique_index + lag_, f'lag_{lag_}'] = future_1                         
 
                     y_pred_w_ids.append(df_group.loc[forecast_index, [self.id_, self.target]].copy())
 
@@ -1035,8 +1049,11 @@ class Forecaster:
                         future_1 = models[group[0]].predict(future_X.drop(columns = [self.id_, *self.group_features]))[0]
 
                         df_valid.loc[future_index, self.target] = future_1
+
+                        unique_dates = pd.Series(df_valid[self.date].unique())
+                        unique_index = np.where(unique_dates == future_index)[0][0]
                         for lag_ in lags:
-                            df_valid.loc[future_index + (lag_ * self.time_delta), f'lag_{lag_}'] = future_1
+                            df_valid.loc[unique_index + lag_, f'lag_{lag_}'] = future_1                           
 
                     y_pred_w_id_ = df_valid.loc[forecast_index, [self.id_, self.target]].copy()
                     y_pred_w_id_.loc[y_pred_w_id_[self.target] < 0, self.target] = 0
@@ -1173,8 +1190,11 @@ class Forecaster:
                             future_1 = models[group[0]].predict(future_X.drop(columns = [self.id_, *self.group_features]))[0]
 
                             df_group.loc[future_index, self.target] = future_1
+
+                            unique_dates = pd.Series(df_group[self.date].unique())
+                            unique_index = np.where(unique_dates == future_index)[0][0]
                             for lag_ in lags:
-                                df_group.loc[future_index + (lag_ * self.time_delta), f'lag_{lag_}'] = future_1
+                                df_group.loc[unique_index + lag_, f'lag_{lag_}'] = future_1                             
 
                         y_pred_w_id__ = df_group.loc[forecast_index, [self.id_, self.target]].copy()
                         y_pred_w_ids_.append(y_pred_w_id__)
