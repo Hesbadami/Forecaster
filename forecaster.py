@@ -233,7 +233,7 @@ class Forecaster:
 
                     df_valid.loc[future_index, self.target] = future_1
 
-                    unique_dates = pd.Series(df_valid[self.date].unique())
+                    unique_dates = pd.Series(df_valid.index.unique())
                     unique_index = np.where(unique_dates == future_index)[0][0]
                     for lag_ in lags:
                         df_valid.loc[unique_index + lag_, f'lag_{lag_}'] = future_1
@@ -368,7 +368,7 @@ class Forecaster:
 
                         df_group.loc[future_index, self.target] = future_1
 
-                        unique_dates = pd.Series(df_group[self.date].unique())
+                        unique_dates = pd.Series(df_group.index.unique())
                         unique_index = np.where(unique_dates == future_index)[0][0]
                         for lag_ in lags:
                             df_group.loc[unique_index + lag_, f'lag_{lag_}'] = future_1                        
