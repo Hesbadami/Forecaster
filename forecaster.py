@@ -7,11 +7,12 @@ pd.set_option('display.max_columns', None)
 import numpy as np
 import matplotlib.pyplot as plt
 plt.style.use('bmh')
-
+from copy import deepcopy
 from scipy.signal import periodogram
 from statsmodels.tsa.stattools import pacf, acf
 from sklearn import metrics
 from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm_notebook
 
 class Forecaster:
@@ -88,8 +89,8 @@ class Forecaster:
             alpha=0.05
             method="ywm"
             nlags = len(average_sales)//2-1
-            lags, thresh = acf(average_sales, nlags=nlags, alpha=alpha)#, method=method)
-            lags = np.where(((lags > thresh[:, 1] - lags)&(lags > 0.3)) | ((lags < thresh[:, 0] - lags)&(lags < -0.3)))[0][1:]
+            lags, thresh = pacf(average_sales, nlags=nlags, alpha=alpha)#, method=method)
+            lags = np.where(((lags > thresh[:, 1] - lags)) | ((lags < thresh[:, 0] - lags)))[0][1:]
 
         if len(lags):
 
@@ -124,7 +125,15 @@ class Forecaster:
 
         return X_valid, y_valid
 
-    def validate(self, model, seasonality = False, lag = False, by = None, plot = False, model_kwargs = {}):
+    def validate(
+        self,
+        model,
+        seasonality = False, 
+        lag = False, 
+        by = None, 
+        plot = False, 
+        fit_kwargs = {}
+    ):
 
         data = self.df[self.df[self.target].notna()].copy()
 
@@ -142,7 +151,11 @@ class Forecaster:
         data["dayofyear"] = data[self.date].dt.dayofyear
         data["weekofyear"] = data[self.date].dt.isocalendar().week.astype(int)
         data['date_index'] = data[self.date].factorize()[0]
-        model_name = str(model).split(".")[-1].split("'")[0]
+        
+        try:
+            model_name = model.name
+        except:
+            model_name = str(model).split(".")[-1].split("'")[0]
 
         if len(self.group_features) == 0:
             df_valid , y_valid = self.train_valid_split(data.set_index(self.date))
@@ -165,19 +178,42 @@ class Forecaster:
 
                 df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
-                X_train = df_valid[df_valid[self.target].notna()].drop(columns = self.target)
+                X_train = df_valid[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
 
-                X_valid = df_valid[df_valid[self.target].isna()].drop(columns = self.target)
+                scaler = StandardScaler()
+                index = X_train.index
+                features = X_train.columns
 
-                model_ = model(**model_kwargs)
-                model_.fit(X_train.drop(columns = self.id_), y_train)
+                X_train = pd.DataFrame(scaler.fit_transform(X_train), index=index, columns=features)
 
-                y_pred = model_.predict(X_valid.drop(columns = self.id_))
+                X_valid = df_valid[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
+                valid_index = X_valid.index
+
+                X_valid = pd.DataFrame(scaler.transform(X_valid), index=valid_index, columns=features)
+
+                model_ = deepcopy(model)
+                
+                if 'LSTM' in str(model_name):
+                    X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+                    X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
+
+                model_.fit(X_train, y_train, **fit_kwargs)
+                
+                try:
+                    y_pred = model_.predict(X_valid, verbose = 0)
+                    y_pred = y_pred.flatten()   
+                except:
+                    y_pred = model_.predict(X_valid).flatten()
+
                 y_pred[y_pred < 0] = 0
-                y_pred = pd.Series(y_pred, index = X_valid.index)
+                y_pred = pd.Series(y_pred, index = valid_index)
 
-                y_train_pred = model_.predict(X_train.drop(columns = 'id'))
+                try:
+                    y_train_pred = model_.predict(X_train, verbose = 0).flatten()
+                except:
+                    y_train_pred = model_.predict(X_train).flatten()
+
                 y_train_pred[y_train_pred < 0] = 0
                 training_score = self.scoring_metric(y_train, y_train_pred)
                 test_score = self.scoring_metric(y_valid, y_pred)
@@ -217,13 +253,26 @@ class Forecaster:
 
                 df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
-                X_train = df_valid[df_valid[self.target].notna()].drop(columns = self.target)
+                X_train = df_valid[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
-                
-                model_ = model(**model_kwargs)
-                model_.fit(X_train.drop(columns = self.id_), y_train)
 
-                y_train_pred = model_.predict(X_train.drop(columns = self.id_))
+                scaler = StandardScaler()
+                index = X_train.index
+                features = X_train.columns
+
+                X_train = pd.DataFrame(scaler.fit_transform(X_train), index=index, columns=features)
+
+                if 'LSTM' in str(model_name):
+                    X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+                                    
+                model_ = deepcopy(model)
+
+                model_.fit(X_train, y_train, **fit_kwargs)
+
+                try:
+                    y_train_pred = model_.predict(X_train, verbose = 0).flatten()
+                except:
+                    y_train_pred = model_.predict(X_train).flatten()
                 y_train_pred[y_train_pred < 0] = 0
                 training_score = self.scoring_metric(y_train, y_train_pred)
 
@@ -231,9 +280,16 @@ class Forecaster:
                 for i in tqdm_notebook(range(len(forecast_index))):
 
                     future_index = df_valid[df_valid[self.target].isna()].index[0]
-                    future_X = df_valid.loc[future_index:future_index].drop(columns = self.target)
+                    future_X = df_valid.loc[future_index:future_index].drop(columns = [self.target, self.id_])
+                    
+                    future_X = scaler.transform(future_X)
 
-                    future_1 = model_.predict(future_X.drop(columns = self.id_))[0]
+                    if 'LSTM' in str(model_name):
+                        future_X = np.reshape(future_X, (future_X.shape[0], 1, future_X.shape[1]))
+                    try:
+                        future_1 = model_.predict(future_X, verbose = 0).flatten()[0]
+                    except:
+                        future_1 = model_.predict(future_X).flatten()[0]
 
                     df_valid.loc[future_index, self.target] = future_1
 
@@ -290,21 +346,32 @@ class Forecaster:
 
                 df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
-                X_train = df_valid[df_valid[self.target].notna()].drop(columns = self.target)
+                X_train = df_valid[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
 
-                X_valid = df_valid[df_valid[self.target].isna()].drop(columns = self.target)
+                X_valid = df_valid[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
+                valid_index = X_valid.index
+                if 'LSTM' in str(model_name):
+                    X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+                    X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))            
+                model_ = deepcopy(model)
+                model_.fit(X_train, y_train, **fit_kwargs)
 
-                model_ = model(**model_kwargs)
-                model_.fit(X_train.drop(columns = self.id_), y_train)
-
-                y_pred = model_.predict(X_valid.drop(columns = self.id_))
+                try:
+                    y_pred = model_.predict(X_valid, verbose = 0).flatten()
+                except:
+                    y_pred = model_.predict(X_valid).flatten()
+                
                 y_pred[y_pred < 0] = 0
 
-                y_pred_w_id = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred}, index = X_valid.index)
+                y_pred_w_id = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred}, index = valid_index)
                 y_pred = y_pred_w_id.sort_values(by = [self.date, self.id_])[self.target]
 
-                y_train_pred = model_.predict(X_train.drop(columns = self.id_))
+                try:
+                    y_train_pred = model_.predict(X_train, verbose = 0).flatten()
+                except:
+                    y_train_pred = model_.predict(X_train).flatten()
+                
                 y_train_pred[y_train_pred < 0] = 0
                 training_score = self.scoring_metric(y_train, y_train_pred)
                 test_score = self.scoring_metric(y_valid, y_pred)
@@ -349,13 +416,20 @@ class Forecaster:
                 df_valid = df_valid_dummy
                 del df_valid_dummy
 
-                X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = self.target)
+                X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
 
-                model_ = model(**model_kwargs)
-                model_.fit(X_train.drop(columns = self.id_), y_train)
+                if 'LSTM' in str(model_name):
+                    X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+                    
+                model_ = deepcopy(model)
 
-                y_train_pred = model_.predict(X_train.drop(columns = self.id_))
+                model_.fit(X_train, y_train, **fit_kwargs)
+
+                try:
+                    y_train_pred = model_.predict(X_train, verbose = 0).flatten()
+                except:
+                    y_train_pred = model_.predict(X_train).flatten()
                 y_train_pred[y_train_pred < 0] = 0
                 training_score = self.scoring_metric(y_train, y_train_pred)
 
@@ -369,9 +443,14 @@ class Forecaster:
                     for i in range(len(forecast_index)):
 
                         future_index = df_group[df_group[self.target].isna()].index[0]
-                        future_X = df_group.loc[future_index:future_index].drop(columns = self.target)
-
-                        future_1 = model_.predict(future_X.drop(columns = [self.id_, *self.group_features]))[0]
+                        future_X = df_group.loc[future_index:future_index].drop(columns = [self.target, self.id_, *self.group_features])
+                        if 'LSTM' in str(model_name):
+                            future_X = np.reshape(future_X.values, (future_X.shape[0], 1, future_X.shape[1]))
+                        
+                        try:
+                            future_1 = model_.predict(future_X, verbose = 0).flatten()[0]
+                        except:
+                            future_1 = model_.predict(future_X).flatten()[0]
 
                         df_group.loc[future_index, self.target] = future_1
 
@@ -442,24 +521,35 @@ class Forecaster:
 
                     df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
-                    X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = self.target)
+                    X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
                     y_trains.append(y_train)
 
-                    X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = self.target)
+                    X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
+                    valid_index = X_valid.index
+                    if 'LSTM' in str(model_name):
+                        X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+                        X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
 
-                    models[group[0]] = model(**model_kwargs)
-                    models[group[0]].fit(X_train.drop(columns = self.id_), y_train)
+                    models[group[0]] = deepcopy(model)
 
-                    y_pred_ = models[group[0]].predict(X_valid.drop(columns = self.id_))
+                    models[group[0]].fit(X_train, y_train, **fit_kwargs)
+
+                    try:
+                        y_pred_ = models[group[0]].predict(X_valid, verbose = 0).flatten()
+                    except:
+                        y_pred_ = models[group[0]].predict(X_valid).flatten()
                     y_pred_[y_pred_ < 0] = 0
 
-                    y_pred_w_id_ = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred_}, index = X_valid.index)
+                    y_pred_w_id_ = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred_}, index = valid_index)
                     y_pred_w_ids.append(y_pred_w_id_)
                     y_pred_ = y_pred_w_id_.sort_values(by = [self.date, self.id_])[self.target]
                     y_preds.append(y_pred_)
 
-                    y_train_pred = models[group[0]].predict(X_train.drop(columns = self.id_))
+                    try:
+                        y_train_pred = models[group[0]].predict(X_train, verbose = 0).flatten()
+                    except:
+                        y_train_pred = models[group[0]].predict(X_train).flatten()
                     y_train_pred[y_train_pred < 0] = 0
                     training_scores[group[0]] = (self.scoring_metric(y_train, y_train_pred))
                     test_scores[group[0]] = (self.scoring_metric(y_valid, y_pred_))
@@ -481,16 +571,24 @@ class Forecaster:
 
                     df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
-                    X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = self.target)
+                    X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
                     y_trains.append(y_train)
 
-                    X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = self.target)
+                    X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
 
-                    models[group[0]] = model(**model_kwargs)
-                    models[group[0]].fit(X_train.drop(columns = self.id_), y_train)
+                    if 'LSTM' in str(model_name):
+                        X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+                        X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
 
-                    y_train_pred = models[group[0]].predict(X_train.drop(columns = self.id_))
+                    models[group[0]] = deepcopy(model)
+
+                    models[group[0]].fit(X_train, y_train, **fit_kwargs)
+
+                    try:
+                        y_train_pred = models[group[0]].predict(X_train, verbose = 0).flatten()
+                    except:
+                        y_train_pred = models[group[0]].predict(X_train).flatten()
                     y_train_pred[y_train_pred < 0] = 0
                     training_scores[group[0]] = self.scoring_metric(y_train, y_train_pred)
 
@@ -498,9 +596,14 @@ class Forecaster:
                     for i in (range(len(forecast_index))):
 
                         future_index = df_valid[df_valid[self.target].isna()].index[0]
-                        future_X = df_valid.loc[future_index:future_index].drop(columns = self.target)
-
-                        future_1 = models[group[0]].predict(future_X.drop(columns = [self.id_, *self.group_features]))[0]
+                        future_X = df_valid.loc[future_index:future_index].drop(columns = [self.target, self.id_, *self.group_features])
+                        if 'LSTM' in str(model_name):
+                            future_X = np.reshape(future_X.values, (future_X.shape[0], 1, future_X.shape[1]))
+                        
+                        try:
+                            future_1 = models[group[0]].predict(future_X, verbose = 0).flatten()[0]
+                        except:
+                            future_1 = models[group[0]].predict(future_X).flatten()[0]
 
                         df_valid.loc[future_index, self.target] = future_1
 
@@ -584,25 +687,36 @@ class Forecaster:
 
                     df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
-                    X_train = df_valid.drop(columns = by)[df_valid[self.target].notna()].drop(columns = self.target)
+                    X_train = df_valid.drop(columns = by)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = by)[df_valid[self.target].notna()][self.target]
                     y_trains.append(y_train)
 
-                    X_valid = df_valid.drop(columns = by)[df_valid[self.target].isna()].drop(columns = self.target)
+                    X_valid = df_valid.drop(columns = by)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
+                    valid_index = X_valid.index
+                    if 'LSTM' in str(model_name):
+                        X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+                        X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
 
-                    models[group[0]] = model(**model_kwargs)
-                    models[group[0]].fit(X_train.drop(columns = self.id_), y_train)
+                    models[group[0]] = deepcopy(model)
 
-                    y_pred_ = models[group[0]].predict(X_valid.drop(columns = self.id_))
+                    models[group[0]].fit(X_train, y_train, **fit_kwargs)
+
+                    try:
+                        y_pred_ = models[group[0]].predict(X_valid, verbose = 0).flatten()
+                    except:
+                        y_pred_ = models[group[0]].predict(X_valid).flatten()
                     y_pred_[y_pred_ < 0] = 0
 
-                    y_pred_w_id_ = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred_}, index = X_valid.index)
+                    y_pred_w_id_ = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred_}, index = valid_index)
                     y_pred_ = y_pred_w_id_.sort_values(by = [self.date, self.id_])[self.target]
 
                     y_pred_w_ids.append(y_pred_w_id_)
                     y_preds.append(y_pred_)
 
-                    y_train_pred = models[group[0]].predict(X_train.drop(columns = self.id_))
+                    try:
+                        y_train_pred = models[group[0]].predict(X_train, verbose = 0).flatten()
+                    except:
+                        y_train_pred = models[group[0]].predict(X_train).flatten()
                     y_train_pred[y_train_pred < 0] = 0
                     training_scores[group[0]] = self.scoring_metric(y_train, y_train_pred)
                     test_scores[group[0]] = self.scoring_metric(y_valid, y_pred_)
@@ -630,14 +744,21 @@ class Forecaster:
                     df_valid = df_valid_dummy
                     del df_valid_dummy
 
-                    X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = self.target)
+                    X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
                     y_trains.append(y_train)
 
-                    models[group[0]] = model(**model_kwargs)
-                    models[group[0]].fit(X_train.drop(columns = self.id_), y_train)
+                    if 'LSTM' in str(model_name):
+                        X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
 
-                    y_train_pred = models[group[0]].predict(X_train.drop(columns = self.id_))
+                    models[group[0]] = deepcopy(model)
+
+                    models[group[0]].fit(X_train, y_train, **fit_kwargs)
+
+                    try:
+                        y_train_pred = models[group[0]].predict(X_train, verbose = 0).flatten()
+                    except:
+                        y_train_pred = models[group[0]].predict(X_train).flatten()
                     y_train_pred[y_train_pred < 0] = 0
                     training_scores[group[0]] = self.scoring_metric(y_train, y_train_pred)
 
@@ -651,9 +772,14 @@ class Forecaster:
                         for i in range(len(forecast_index)):
 
                             future_index = df_group[df_group[self.target].isna()].index[0]
-                            future_X = df_group.loc[future_index:future_index].drop(columns = self.target)
-
-                            future_1 = models[group[0]].predict(future_X.drop(columns = [self.id_, *self.group_features]))[0]
+                            future_X = df_group.loc[future_index:future_index].drop(columns = [self.target, self.id_, *self.group_features])
+                            if 'LSTM' in str(model_name):
+                                future_X = np.reshape(future_X.values, (future_X.shape[0], 1, future_X.shape[1]))
+                            
+                            try:
+                                future_1 = models[group[0]].predict(future_X, verbose = 0).flatten()[0]
+                            except:
+                                future_1 = models[group[0]].predict(future_X).flatten()[0]
 
                             df_group.loc[future_index, self.target] = future_1
 
@@ -704,10 +830,21 @@ class Forecaster:
             return y_pred.reset_index(), scores
 
 
-    def predict(self, model, seasonality = False, lag = False, by = None, plot = False, model_kwargs = {}):
+    def predict(
+        self, 
+        model, 
+        seasonality = False, 
+        lag = False, 
+        by = None, 
+        plot = False, 
+        fit_kwargs = {}
+    ):
 
-        model_name = str(model).split(".")[-1].split("'")[0]
-
+        try:
+            model_name = model.name
+        except:
+            model_name = str(model).split(".")[-1].split("'")[0]
+        
         data = self.df.copy()
 
         if not self.keep_id:
@@ -724,8 +861,12 @@ class Forecaster:
         data["dayofyear"] = data[self.date].dt.dayofyear
         data["weekofyear"] = data[self.date].dt.isocalendar().week.astype(int)
         data['date_index'] = data[self.date].factorize()[0]
-        model_name = str(model).split(".")[-1].split("'")[0]
-
+        
+        try:
+            model_name = model.name
+        except:
+            model_name = str(model).split(".")[-1].split("'")[0]
+        
         df_valid = data.set_index(self.date)
 
         if len(self.group_features) == 0:
@@ -748,19 +889,30 @@ class Forecaster:
 
                 df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
-                X_train = df_valid[df_valid[self.target].notna()].drop(columns = self.target)
+                X_train = df_valid[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
 
-                X_valid = df_valid[df_valid[self.target].isna()].drop(columns = self.target)
+                X_valid = df_valid[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
+                valid_index = X_valid.index
+                if 'LSTM' in str(model_name):
+                    X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+                    X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
 
-                model_ = model(**model_kwargs)
-                model_.fit(X_train.drop(columns = self.id_), y_train)
+                model_ = deepcopy(model)
 
-                y_pred = model_.predict(X_valid.drop(columns = self.id_))
+                model_.fit(X_train, y_train, **fit_kwargs)
+
+                try:
+                    y_pred = model_.predict(X_valid, verbose = 0).flatten()
+                except:
+                    y_pred = model_.predict(X_valid).flatten()
                 y_pred[y_pred < 0] = 0
-                y_pred = pd.Series(y_pred, index = X_valid.index)
+                y_pred = pd.Series(y_pred, index = valid_index)
 
-                y_train_pred = model_.predict(X_train.drop(columns = 'id'))
+                try:
+                    y_train_pred = model_.predict(X_train, verbose = 0).flatten()
+                except:
+                    y_train_pred = model_.predict(X_train).flatten()
                 y_train_pred[y_train_pred < 0] = 0
                 training_score = self.scoring_metric(y_train, y_train_pred)
 
@@ -798,13 +950,20 @@ class Forecaster:
 
                 df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
-                X_train = df_valid[df_valid[self.target].notna()].drop(columns = self.target)
+                X_train = df_valid[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
 
-                model_ = model(**model_kwargs)
-                model_.fit(X_train.drop(columns = self.id_), y_train)
+                if 'LSTM' in str(model_name):
+                    X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
 
-                y_train_pred = model_.predict(X_train.drop(columns = self.id_))
+                model_ = deepcopy(model)
+
+                model_.fit(X_train, y_train, **fit_kwargs)
+
+                try:
+                    y_train_pred = model_.predict(X_train, verbose = 0).flatten()
+                except:
+                    y_train_pred = model_.predict(X_train).flatten()
                 y_train_pred[y_train_pred < 0] = 0
                 training_score = self.scoring_metric(y_train, y_train_pred)
 
@@ -812,9 +971,14 @@ class Forecaster:
                 for i in tqdm_notebook(range(len(forecast_index))):
 
                     future_index = df_valid[df_valid[self.target].isna()].index[0]
-                    future_X = df_valid.loc[future_index:future_index].drop(columns = self.target)
-
-                    future_1 = model_.predict(future_X.drop(columns = self.id_))[0]
+                    future_X = df_valid.loc[future_index:future_index].drop(columns = [self.target, self.id_])
+                    if 'LSTM' in str(model_name):
+                        future_X = np.reshape(future_X.values, (future_X.shape[0], 1, future_X.shape[1]))
+                    
+                    try:
+                        future_1 = model_.predict(future_X, verbose = 0).flatten()[0]
+                    except:
+                        future_1 = model_.predict(future_X).flatten()[0]
 
                     df_valid.loc[future_index, self.target] = future_1
 
@@ -867,21 +1031,33 @@ class Forecaster:
 
                 df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
-                X_train = df_valid[df_valid[self.target].notna()].drop(columns = self.target)
+                X_train = df_valid[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
 
-                X_valid = df_valid[df_valid[self.target].isna()].drop(columns = self.target)
+                X_valid = df_valid[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
+                valid_index = X_valid.index
+                if 'LSTM' in str(model_name):
+                    X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+                    X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
 
-                model_ = model(**model_kwargs)
-                model_.fit(X_train.drop(columns = self.id_), y_train)
+                model_ = deepcopy(model)
 
-                y_pred = model_.predict(X_valid.drop(columns = self.id_))
+                model_.fit(X_train, y_train, **fit_kwargs)
+
+                try:
+                    y_pred = model_.predict(X_valid, verbose = 0).flatten()
+                except:
+                    y_pred = model_.predict(X_valid).flatten()
                 y_pred[y_pred < 0] = 0
 
-                y_pred_w_id = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred}, index = X_valid.index)
+                y_pred_w_id = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred}, index = valid_index)
                 y_pred = y_pred_w_id.sort_values(by = [self.date, self.id_])[self.target]
 
-                y_train_pred = model_.predict(X_train.drop(columns = self.id_))
+                try:
+                    y_train_pred = model_.predict(X_train, verbose = 0).flatten()
+                except:
+                    y_train_pred = model_.predict(X_train).flatten()
+                
                 y_train_pred[y_train_pred < 0] = 0
                 training_score = self.scoring_metric(y_train, y_train_pred)
 
@@ -923,13 +1099,20 @@ class Forecaster:
                 df_valid = df_valid_dummy
                 del df_valid_dummy
 
-                X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = self.target)
+                X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
 
-                model_ = model(**model_kwargs)
-                model_.fit(X_train.drop(columns = self.id_), y_train)
+                if 'LSTM' in str(model_name):
+                    X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
 
-                y_train_pred = model_.predict(X_train.drop(columns = self.id_))
+                model_ = deepcopy(model)
+
+                model_.fit(X_train, y_train, **fit_kwargs)
+
+                try:
+                    y_train_pred = model_.predict(X_train, verbose = 0).flatten()
+                except:
+                    y_train_pred = model_.predict(X_train).flatten()
                 y_train_pred[y_train_pred < 0] = 0
                 training_score = self.scoring_metric(y_train, y_train_pred)
 
@@ -943,9 +1126,14 @@ class Forecaster:
                     for i in range(len(forecast_index)):
 
                         future_index = df_group[df_group[self.target].isna()].index[0]
-                        future_X = df_group.loc[future_index:future_index].drop(columns = self.target)
-
-                        future_1 = model_.predict(future_X.drop(columns = [self.id_, *self.group_features]))[0]
+                        future_X = df_group.loc[future_index:future_index].drop(columns = [self.target, self.id_, *self.group_features])
+                        if 'LSTM' in str(model_name):
+                            future_X = np.reshape(future_X.values, (future_X.shape[0], 1, future_X.shape[1]))
+                        
+                        try:
+                            future_1 = model_.predict(future_X, verbose = 0).flatten()[0]
+                        except:
+                            future_1 = model_.predict(future_X).flatten()[0]
 
                         df_group.loc[future_index, self.target] = future_1
 
@@ -1011,24 +1199,35 @@ class Forecaster:
 
                     df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
-                    X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = self.target)
+                    X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
                     y_trains.append(y_train)
 
-                    X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = self.target)
+                    X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
+                    valid_index = X_valid.index
+                    if 'LSTM' in str(model_name):
+                        X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+                        X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
 
-                    models[group[0]] = model(**model_kwargs)
-                    models[group[0]].fit(X_train.drop(columns = self.id_), y_train)
+                    models[group[0]] = deepcopy(model)
 
-                    y_pred_ = models[group[0]].predict(X_valid.drop(columns = self.id_))
+                    models[group[0]].fit(X_train, y_train, **fit_kwargs)
+
+                    try:
+                        y_pred_ = models[group[0]].predict(X_valid, verbose = 0).flatten()
+                    except:
+                        y_pred_ = models[group[0]].predict(X_valid).flatten()
                     y_pred_[y_pred_ < 0] = 0
 
-                    y_pred_w_id_ = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred_}, index = X_valid.index)
+                    y_pred_w_id_ = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred_}, index = valid_index)
                     y_pred_w_ids.append(y_pred_w_id_)
                     y_pred_ = y_pred_w_id_.sort_values(by = [self.date, self.id_])[self.target]
                     y_preds.append(y_pred_)
 
-                    y_train_pred = models[group[0]].predict(X_train.drop(columns = self.id_))
+                    try:
+                        y_train_pred = models[group[0]].predict(X_train, verbose = 0).flatten()
+                    except:
+                        y_train_pred = models[group[0]].predict(X_train).flatten()
                     y_train_pred[y_train_pred < 0] = 0
                     training_scores[group[0]] = (self.scoring_metric(y_train, y_train_pred))
 
@@ -1049,16 +1248,25 @@ class Forecaster:
 
                     df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
-                    X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = self.target)
+                    X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
                     y_trains.append(y_train)
 
-                    X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = self.target)
+                    X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
 
-                    models[group[0]] = model(**model_kwargs)
-                    models[group[0]].fit(X_train.drop(columns = self.id_), y_train)
+                    if 'LSTM' in str(model_name):
+                        X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+                        X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
 
-                    y_train_pred = models[group[0]].predict(X_train.drop(columns = self.id_))
+                    models[group[0]] = deepcopy(model)
+
+                    models[group[0]].fit(X_train, y_train, **fit_kwargs)
+
+                    try:
+                        y_train_pred = models[group[0]].predict(X_train, verbose = 0).flatten()
+                    except:
+                        y_train_pred = models[group[0]].predict(X_train).flatten()
+                    
                     y_train_pred[y_train_pred < 0] = 0
                     training_scores[group[0]] = self.scoring_metric(y_train, y_train_pred)
 
@@ -1066,9 +1274,14 @@ class Forecaster:
                     for i in (range(len(forecast_index))):
 
                         future_index = df_valid[df_valid[self.target].isna()].index[0]
-                        future_X = df_valid.loc[future_index:future_index].drop(columns = self.target)
-
-                        future_1 = models[group[0]].predict(future_X.drop(columns = [self.id_, *self.group_features]))[0]
+                        future_X = df_valid.loc[future_index:future_index].drop(columns = [self.target, self.id_, *self.group_features])
+                        if 'LSTM' in str(model_name):
+                            future_X = np.reshape(future_X.values, (future_X.shape[0], 1, future_X.shape[1]))
+                        
+                        try:
+                            future_1 = models[group[0]].predict(future_X, verbose = 0).flatten()[0]
+                        except:
+                            future_1 = models[group[0]].predict(future_X).flatten()[0]
 
                         df_valid.loc[future_index, self.target] = future_1
 
@@ -1144,25 +1357,37 @@ class Forecaster:
 
                     df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
-                    X_train = df_valid.drop(columns = by)[df_valid[self.target].notna()].drop(columns = self.target)
+                    X_train = df_valid.drop(columns = by)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = by)[df_valid[self.target].notna()][self.target]
                     y_trains.append(y_train)
 
-                    X_valid = df_valid.drop(columns = by)[df_valid[self.target].isna()].drop(columns = self.target)
+                    X_valid = df_valid.drop(columns = by)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
+                    valid_index = X_valid.index
 
-                    models[group[0]] = model(**model_kwargs)
-                    models[group[0]].fit(X_train.drop(columns = self.id_), y_train)
+                    if 'LSTM' in str(model_name):
+                        X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+                        X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
 
-                    y_pred_ = models[group[0]].predict(X_valid.drop(columns = self.id_))
+                    models[group[0]] = deepcopy(model)
+
+                    models[group[0]].fit(X_train, y_train, **fit_kwargs)
+
+                    try:
+                        y_pred_ = models[group[0]].predict(X_valid, verbose = 0).flatten()
+                    except:
+                        y_pred_ = models[group[0]].predict(X_valid).flatten()
                     y_pred_[y_pred_ < 0] = 0
 
-                    y_pred_w_id_ = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred_}, index = X_valid.index)
+                    y_pred_w_id_ = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred_}, index = valid_index)
                     y_pred_ = y_pred_w_id_.sort_values(by = [self.date, self.id_])[self.target]
 
                     y_pred_w_ids.append(y_pred_w_id_)
                     y_preds.append(y_pred_)
 
-                    y_train_pred = models[group[0]].predict(X_train.drop(columns = self.id_))
+                    try:
+                        y_train_pred = models[group[0]].predict(X_train, verbose = 0).flatten()
+                    except:
+                        y_train_pred = models[group[0]].predict(X_train).flatten()
                     y_train_pred[y_train_pred < 0] = 0
                     training_scores[group[0]] = self.scoring_metric(y_train, y_train_pred)
 
@@ -1189,14 +1414,21 @@ class Forecaster:
                     df_valid = df_valid_dummy
                     del df_valid_dummy
 
-                    X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = self.target)
+                    X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
                     y_trains.append(y_train)
 
-                    models[group[0]] = model(**model_kwargs)
-                    models[group[0]].fit(X_train.drop(columns = self.id_), y_train)
+                    if 'LSTM' in str(model_name):
+                        X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
 
-                    y_train_pred = models[group[0]].predict(X_train.drop(columns = self.id_))
+                    models[group[0]] = deepcopy(model)
+
+                    models[group[0]].fit(X_train, y_train, **fit_kwargs)
+
+                    try:
+                        y_train_pred = models[group[0]].predict(X_train, verbose = 0).flatten()
+                    except:
+                        y_train_pred = models[group[0]].predict(X_train).flatten()
                     y_train_pred[y_train_pred < 0] = 0
                     training_scores[group[0]] = self.scoring_metric(y_train, y_train_pred)
 
@@ -1210,9 +1442,14 @@ class Forecaster:
                         for i in range(len(forecast_index)):
 
                             future_index = df_group[df_group[self.target].isna()].index[0]
-                            future_X = df_group.loc[future_index:future_index].drop(columns = self.target)
-
-                            future_1 = models[group[0]].predict(future_X.drop(columns = [self.id_, *self.group_features]))[0]
+                            future_X = df_group.loc[future_index:future_index].drop(columns = [self.target, self.id_, *self.group_features])
+                            if 'LSTM' in str(model_name):
+                                future_X = np.reshape(future_X.values, (future_X.shape[0], 1, future_X.shape[1]))
+                            
+                            try:
+                                future_1 = models[group[0]].predict(future_X, verbose = 0).flatten()[0]
+                            except:
+                                future_1 = models[group[0]].predict(future_X).flatten()[0]
 
                             df_group.loc[future_index, self.target] = future_1
 
