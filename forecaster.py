@@ -153,8 +153,9 @@ class Forecaster:
         data['date_index'] = data[self.date].factorize()[0]
         
         try:
-            model_name = model.name
-        except:
+            model_name = str(list(model.layers)[0]).split('.')[-1].split('at')[0]
+        except Exception as e:
+            print(e)
             model_name = str(model).split(".")[-1].split("'")[0]
 
         if len(self.group_features) == 0:
@@ -194,9 +195,13 @@ class Forecaster:
 
                 model_ = deepcopy(model)
                 
-                if 'LSTM' in str(model_name):
+                if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                     X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
                     X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
+
+                if 'Conv1D' in str(model_name):
+                    X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
+                    X_valid = np.reshape(X_valid.values, (X_valid.shape[0], X_valid.shape[1], 1))                
 
                 model_.fit(X_train, y_train, **fit_kwargs)
                 
@@ -262,9 +267,11 @@ class Forecaster:
 
                 X_train = pd.DataFrame(scaler.fit_transform(X_train), index=index, columns=features)
 
-                if 'LSTM' in str(model_name):
+                if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                     X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
-                                    
+
+                if 'Conv1D' in str(model_name):
+                    X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
                 model_ = deepcopy(model)
 
                 model_.fit(X_train, y_train, **fit_kwargs)
@@ -284,8 +291,12 @@ class Forecaster:
                     
                     future_X = scaler.transform(future_X)
 
-                    if 'LSTM' in str(model_name):
+                    if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                         future_X = np.reshape(future_X, (future_X.shape[0], 1, future_X.shape[1]))
+
+                    if 'Conv1D' in str(model_name):
+                        future_X = np.reshape(future_X, (future_X.shape[0], future_X.shape[1], 1))
+
                     try:
                         future_1 = model_.predict(future_X, verbose = 0).flatten()[0]
                     except:
@@ -351,9 +362,13 @@ class Forecaster:
 
                 X_valid = df_valid[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
                 valid_index = X_valid.index
-                if 'LSTM' in str(model_name):
+                if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                     X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
-                    X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))            
+                    X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
+
+                if 'Conv1D' in str(model_name):
+                    X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
+                    X_valid = np.reshape(X_valid.values, (X_valid.shape[0], X_valid.shape[1], 1))            
                 model_ = deepcopy(model)
                 model_.fit(X_train, y_train, **fit_kwargs)
 
@@ -419,8 +434,11 @@ class Forecaster:
                 X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
 
-                if 'LSTM' in str(model_name):
+                if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                     X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+
+                if 'Conv1D' in str(model_name):
+                    X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
                     
                 model_ = deepcopy(model)
 
@@ -444,9 +462,11 @@ class Forecaster:
 
                         future_index = df_group[df_group[self.target].isna()].index[0]
                         future_X = df_group.loc[future_index:future_index].drop(columns = [self.target, self.id_, *self.group_features])
-                        if 'LSTM' in str(model_name):
-                            future_X = np.reshape(future_X.values, (future_X.shape[0], 1, future_X.shape[1]))
-                        
+                        if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
+                            future_X = np.reshape(future_X, (future_X.shape[0], 1, future_X.shape[1]))
+
+                        if 'Conv1D' in str(model_name):
+                            future_X = np.reshape(future_X, (future_X.shape[0], future_X.shape[1], 1))
                         try:
                             future_1 = model_.predict(future_X, verbose = 0).flatten()[0]
                         except:
@@ -527,9 +547,13 @@ class Forecaster:
 
                     X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
                     valid_index = X_valid.index
-                    if 'LSTM' in str(model_name):
+                    if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                         X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
                         X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
+
+                    if 'Conv1D' in str(model_name):
+                        X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
+                        X_valid = np.reshape(X_valid.values, (X_valid.shape[0], X_valid.shape[1], 1)) 
 
                     models[group[0]] = deepcopy(model)
 
@@ -577,9 +601,13 @@ class Forecaster:
 
                     X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
 
-                    if 'LSTM' in str(model_name):
+                    if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                         X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
                         X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
+
+                    if 'Conv1D' in str(model_name):
+                        X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
+                        X_valid = np.reshape(X_valid.values, (X_valid.shape[0], X_valid.shape[1], 1)) 
 
                     models[group[0]] = deepcopy(model)
 
@@ -597,9 +625,11 @@ class Forecaster:
 
                         future_index = df_valid[df_valid[self.target].isna()].index[0]
                         future_X = df_valid.loc[future_index:future_index].drop(columns = [self.target, self.id_, *self.group_features])
-                        if 'LSTM' in str(model_name):
-                            future_X = np.reshape(future_X.values, (future_X.shape[0], 1, future_X.shape[1]))
-                        
+                        if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
+                            future_X = np.reshape(future_X, (future_X.shape[0], 1, future_X.shape[1]))
+
+                        if 'Conv1D' in str(model_name):
+                            future_X = np.reshape(future_X, (future_X.shape[0], future_X.shape[1], 1))
                         try:
                             future_1 = models[group[0]].predict(future_X, verbose = 0).flatten()[0]
                         except:
@@ -693,9 +723,13 @@ class Forecaster:
 
                     X_valid = df_valid.drop(columns = by)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
                     valid_index = X_valid.index
-                    if 'LSTM' in str(model_name):
+                    if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                         X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
                         X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
+
+                    if 'Conv1D' in str(model_name):
+                        X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
+                        X_valid = np.reshape(X_valid.values, (X_valid.shape[0], X_valid.shape[1], 1)) 
 
                     models[group[0]] = deepcopy(model)
 
@@ -748,8 +782,11 @@ class Forecaster:
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
                     y_trains.append(y_train)
 
-                    if 'LSTM' in str(model_name):
+                    if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                         X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+
+                    if 'Conv1D' in str(model_name):
+                        X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
 
                     models[group[0]] = deepcopy(model)
 
@@ -773,9 +810,11 @@ class Forecaster:
 
                             future_index = df_group[df_group[self.target].isna()].index[0]
                             future_X = df_group.loc[future_index:future_index].drop(columns = [self.target, self.id_, *self.group_features])
-                            if 'LSTM' in str(model_name):
-                                future_X = np.reshape(future_X.values, (future_X.shape[0], 1, future_X.shape[1]))
-                            
+                            if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
+                                future_X = np.reshape(future_X, (future_X.shape[0], 1, future_X.shape[1]))
+
+                            if 'Conv1D' in str(model_name):
+                                future_X = np.reshape(future_X, (future_X.shape[0], future_X.shape[1], 1))
                             try:
                                 future_1 = models[group[0]].predict(future_X, verbose = 0).flatten()[0]
                             except:
@@ -841,7 +880,7 @@ class Forecaster:
     ):
 
         try:
-            model_name = model.name
+            model_name = model.layers[0].split('.')[-1].split('at')[0].strip()
         except:
             model_name = str(model).split(".")[-1].split("'")[0]
         
@@ -863,7 +902,7 @@ class Forecaster:
         data['date_index'] = data[self.date].factorize()[0]
         
         try:
-            model_name = model.name
+            model_name = model.layers[0].split('.')[-1].split('at')[0].strip()
         except:
             model_name = str(model).split(".")[-1].split("'")[0]
         
@@ -894,9 +933,13 @@ class Forecaster:
 
                 X_valid = df_valid[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
                 valid_index = X_valid.index
-                if 'LSTM' in str(model_name):
+                if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                     X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
                     X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
+
+                if 'Conv1D' in str(model_name):
+                    X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
+                    X_valid = np.reshape(X_valid.values, (X_valid.shape[0], X_valid.shape[1], 1)) 
 
                 model_ = deepcopy(model)
 
@@ -953,8 +996,11 @@ class Forecaster:
                 X_train = df_valid[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
 
-                if 'LSTM' in str(model_name):
+                if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                     X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+
+                if 'Conv1D' in str(model_name):
+                    X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
 
                 model_ = deepcopy(model)
 
@@ -972,9 +1018,11 @@ class Forecaster:
 
                     future_index = df_valid[df_valid[self.target].isna()].index[0]
                     future_X = df_valid.loc[future_index:future_index].drop(columns = [self.target, self.id_])
-                    if 'LSTM' in str(model_name):
-                        future_X = np.reshape(future_X.values, (future_X.shape[0], 1, future_X.shape[1]))
-                    
+                    if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
+                        future_X = np.reshape(future_X, (future_X.shape[0], 1, future_X.shape[1]))
+
+                    if 'Conv1D' in str(model_name):
+                        future_X = np.reshape(future_X, (future_X.shape[0], future_X.shape[1], 1))
                     try:
                         future_1 = model_.predict(future_X, verbose = 0).flatten()[0]
                     except:
@@ -1036,9 +1084,13 @@ class Forecaster:
 
                 X_valid = df_valid[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
                 valid_index = X_valid.index
-                if 'LSTM' in str(model_name):
+                if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                     X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
                     X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
+
+                if 'Conv1D' in str(model_name):
+                    X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
+                    X_valid = np.reshape(X_valid.values, (X_valid.shape[0], X_valid.shape[1], 1)) 
 
                 model_ = deepcopy(model)
 
@@ -1101,9 +1153,11 @@ class Forecaster:
 
                 X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
-
-                if 'LSTM' in str(model_name):
+                if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                     X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+
+                if 'Conv1D' in str(model_name):
+                    X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
 
                 model_ = deepcopy(model)
 
@@ -1127,9 +1181,11 @@ class Forecaster:
 
                         future_index = df_group[df_group[self.target].isna()].index[0]
                         future_X = df_group.loc[future_index:future_index].drop(columns = [self.target, self.id_, *self.group_features])
-                        if 'LSTM' in str(model_name):
-                            future_X = np.reshape(future_X.values, (future_X.shape[0], 1, future_X.shape[1]))
-                        
+                        if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
+                            future_X = np.reshape(future_X, (future_X.shape[0], 1, future_X.shape[1]))
+
+                        if 'Conv1D' in str(model_name):
+                            future_X = np.reshape(future_X, (future_X.shape[0], future_X.shape[1], 1))
                         try:
                             future_1 = model_.predict(future_X, verbose = 0).flatten()[0]
                         except:
@@ -1205,9 +1261,13 @@ class Forecaster:
 
                     X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
                     valid_index = X_valid.index
-                    if 'LSTM' in str(model_name):
+                    if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                         X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
                         X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
+
+                    if 'Conv1D' in str(model_name):
+                        X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
+                        X_valid = np.reshape(X_valid.values, (X_valid.shape[0], X_valid.shape[1], 1)) 
 
                     models[group[0]] = deepcopy(model)
 
@@ -1254,9 +1314,13 @@ class Forecaster:
 
                     X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
 
-                    if 'LSTM' in str(model_name):
+                    if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                         X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
                         X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
+
+                    if 'Conv1D' in str(model_name):
+                        X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
+                        X_valid = np.reshape(X_valid.values, (X_valid.shape[0], X_valid.shape[1], 1)) 
 
                     models[group[0]] = deepcopy(model)
 
@@ -1275,9 +1339,11 @@ class Forecaster:
 
                         future_index = df_valid[df_valid[self.target].isna()].index[0]
                         future_X = df_valid.loc[future_index:future_index].drop(columns = [self.target, self.id_, *self.group_features])
-                        if 'LSTM' in str(model_name):
-                            future_X = np.reshape(future_X.values, (future_X.shape[0], 1, future_X.shape[1]))
-                        
+                        if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
+                            future_X = np.reshape(future_X, (future_X.shape[0], 1, future_X.shape[1]))
+
+                        if 'Conv1D' in str(model_name):
+                            future_X = np.reshape(future_X, (future_X.shape[0], future_X.shape[1], 1))
                         try:
                             future_1 = models[group[0]].predict(future_X, verbose = 0).flatten()[0]
                         except:
@@ -1364,9 +1430,13 @@ class Forecaster:
                     X_valid = df_valid.drop(columns = by)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
                     valid_index = X_valid.index
 
-                    if 'LSTM' in str(model_name):
+                    if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                         X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
                         X_valid = np.reshape(X_valid.values, (X_valid.shape[0], 1, X_valid.shape[1]))
+
+                    if 'Conv1D' in str(model_name):
+                        X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
+                        X_valid = np.reshape(X_valid.values, (X_valid.shape[0], X_valid.shape[1], 1)) 
 
                     models[group[0]] = deepcopy(model)
 
@@ -1417,9 +1487,11 @@ class Forecaster:
                     X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
                     y_trains.append(y_train)
-
-                    if 'LSTM' in str(model_name):
+                    if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                         X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
+
+                    if 'Conv1D' in str(model_name):
+                        X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
 
                     models[group[0]] = deepcopy(model)
 
@@ -1443,9 +1515,11 @@ class Forecaster:
 
                             future_index = df_group[df_group[self.target].isna()].index[0]
                             future_X = df_group.loc[future_index:future_index].drop(columns = [self.target, self.id_, *self.group_features])
-                            if 'LSTM' in str(model_name):
-                                future_X = np.reshape(future_X.values, (future_X.shape[0], 1, future_X.shape[1]))
-                            
+                            if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
+                                future_X = np.reshape(future_X, (future_X.shape[0], 1, future_X.shape[1]))
+
+                            if 'Conv1D' in str(model_name):
+                                future_X = np.reshape(future_X, (future_X.shape[0], future_X.shape[1], 1))
                             try:
                                 future_1 = models[group[0]].predict(future_X, verbose = 0).flatten()[0]
                             except:
