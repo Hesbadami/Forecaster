@@ -153,10 +153,9 @@ class Forecaster:
         data['date_index'] = data[self.date].factorize()[0]
         
         try:
-            model_name = str(list(model.layers)[0]).split('.')[-1].split('at')[0]
-        except Exception as e:
-            print(e)
-            model_name = str(model).split(".")[-1].split("'")[0]
+            model_name = str(list(model.layers)[0]).split('.')[-1].split('object')[0]
+        except:
+            model_name = str(model).split("(")[0]
 
         if len(self.group_features) == 0:
             df_valid , y_valid = self.train_valid_split(data.set_index(self.date))
@@ -179,19 +178,16 @@ class Forecaster:
 
                 df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
+                Xscaler = StandardScaler()
+                yscaler = StandardScaler()
+
+                df_valid[df_valid.columns.drop([self.id_, self.target])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.id_, self.target])])
+                df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+
                 X_train = df_valid[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
-
-                scaler = StandardScaler()
-                index = X_train.index
-                features = X_train.columns
-
-                X_train = pd.DataFrame(scaler.fit_transform(X_train), index=index, columns=features)
-
                 X_valid = df_valid[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
                 valid_index = X_valid.index
-
-                X_valid = pd.DataFrame(scaler.transform(X_valid), index=valid_index, columns=features)
 
                 model_ = deepcopy(model)
                 
@@ -212,6 +208,7 @@ class Forecaster:
                     y_pred = model_.predict(X_valid).flatten()
 
                 y_pred[y_pred < 0] = 0
+                y_pred = yscaler.inverse_transform(y_pred.reshape(-1, 1)).flatten()
                 y_pred = pd.Series(y_pred, index = valid_index)
 
                 try:
@@ -227,7 +224,7 @@ class Forecaster:
                 display(scores)
 
                 if plot == True:
-                    ax = y_train.plot(figsize = (15, 3))
+                    ax = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index).plot(figsize = (10, 3))
                     y_valid.plot(ax = ax, color = 'tab:blue', alpha = 0.5)
                     y_pred.plot(ax = ax, color = 'tab:orange')
                     ax.set_xlabel(self.date)
@@ -258,28 +255,29 @@ class Forecaster:
 
                 df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
+                Xscaler = StandardScaler()
+                yscaler = StandardScaler()
+
+                df_valid[df_valid.columns.drop([self.id_, self.target])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.id_, self.target])])
+                df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+
                 X_train = df_valid[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
-
-                scaler = StandardScaler()
-                index = X_train.index
-                features = X_train.columns
-
-                X_train = pd.DataFrame(scaler.fit_transform(X_train), index=index, columns=features)
 
                 if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                     X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
 
                 if 'Conv1D' in str(model_name):
                     X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
+                
                 model_ = deepcopy(model)
-
                 model_.fit(X_train, y_train, **fit_kwargs)
 
                 try:
                     y_train_pred = model_.predict(X_train, verbose = 0).flatten()
                 except:
                     y_train_pred = model_.predict(X_train).flatten()
+
                 y_train_pred[y_train_pred < 0] = 0
                 training_score = self.scoring_metric(y_train, y_train_pred)
 
@@ -288,14 +286,12 @@ class Forecaster:
 
                     future_index = df_valid[df_valid[self.target].isna()].index[0]
                     future_X = df_valid.loc[future_index:future_index].drop(columns = [self.target, self.id_])
-                    
-                    future_X = scaler.transform(future_X)
 
                     if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
-                        future_X = np.reshape(future_X, (future_X.shape[0], 1, future_X.shape[1]))
+                        future_X = np.reshape(future_X.values, (future_X.shape[0], 1, future_X.shape[1]))
 
                     if 'Conv1D' in str(model_name):
-                        future_X = np.reshape(future_X, (future_X.shape[0], future_X.shape[1], 1))
+                        future_X = np.reshape(future_X.values, (future_X.shape[0], future_X.shape[1], 1))
 
                     try:
                         future_1 = model_.predict(future_X, verbose = 0).flatten()[0]
@@ -314,6 +310,7 @@ class Forecaster:
 
                 y_pred_w_id = df_valid.loc[forecast_index, [self.id_, self.target]].copy()
                 y_pred_w_id.loc[y_pred_w_id[self.target] < 0, self.target] = 0
+                y_pred_w_id[self.target] = yscaler.inverse_transform(y_pred_w_id[self.target].values.reshape(-1, 1)).flatten()
 
                 y_pred = y_pred_w_id[self.target]
 
@@ -323,7 +320,7 @@ class Forecaster:
                 display(scores)
 
                 if plot == True:
-                    ax = y_train.plot(figsize = (15, 3))
+                    ax = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index).plot(figsize = (10, 3))
                     y_valid.plot(ax = ax, color = 'tab:blue', alpha = 0.5)
                     y_pred.plot(ax = ax, color = 'tab:orange')
                     ax.set_xlabel(self.date)
@@ -395,7 +392,7 @@ class Forecaster:
                 display(scores)
 
                 if plot == True:
-                    ax = y_train.reset_index().groupby(self.date).mean().plot(figsize = (15, 3))
+                    ax = y_train.reset_index().groupby(self.date).mean().plot(figsize = (10, 3))
                     y_valid.reset_index().groupby(self.date).mean().plot(ax = ax, color = 'tab:blue', alpha = 0.5)
                     y_pred.reset_index().groupby(self.date).mean().plot(ax = ax, color = 'tab:orange')
                     ax.set_xlabel(self.date)
@@ -495,7 +492,7 @@ class Forecaster:
                 display(scores)
 
                 if plot == True:
-                    ax = y_train.reset_index().groupby(self.date).mean().plot(figsize = (15, 3))
+                    ax = y_train.reset_index().groupby(self.date).mean().plot(figsize = (10, 3))
                     y_valid.reset_index().groupby(self.date).mean().plot(ax = ax, color = 'tab:blue', alpha = 0.5)
                     y_pred.reset_index().groupby(self.date).mean().plot(ax = ax, color = 'tab:orange')
                     ax.set_xlabel(self.date)
@@ -880,9 +877,9 @@ class Forecaster:
     ):
 
         try:
-            model_name = model.layers[0].split('.')[-1].split('at')[0].strip()
+            model_name = model.layers[0].split('.')[-1].split('object')[0].strip()
         except:
-            model_name = str(model).split(".")[-1].split("'")[0]
+            model_name = str(model).split("(")[0]
         
         data = self.df.copy()
 
@@ -902,9 +899,9 @@ class Forecaster:
         data['date_index'] = data[self.date].factorize()[0]
         
         try:
-            model_name = model.layers[0].split('.')[-1].split('at')[0].strip()
+            model_name = model.layers[0].split('.')[-1].split('object')[0].strip()
         except:
-            model_name = str(model).split(".")[-1].split("'")[0]
+            model_name = str(model).split("(")[0]
         
         df_valid = data.set_index(self.date)
 
