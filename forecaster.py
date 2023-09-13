@@ -207,8 +207,9 @@ class Forecaster:
                 except:
                     y_pred = model_.predict(X_valid).flatten()
 
-                y_pred[y_pred < 0] = 0
                 y_pred = yscaler.inverse_transform(y_pred.reshape(-1, 1)).flatten()
+                y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
+
                 y_pred = pd.Series(y_pred, index = valid_index)
 
                 try:
@@ -216,7 +217,8 @@ class Forecaster:
                 except:
                     y_train_pred = model_.predict(X_train).flatten()
 
-                y_train_pred[y_train_pred < 0] = 0
+                y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
+
                 training_score = self.scoring_metric(y_train, y_train_pred)
                 test_score = self.scoring_metric(y_valid, y_pred)
 
@@ -224,7 +226,7 @@ class Forecaster:
                 display(scores)
 
                 if plot == True:
-                    ax = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index).plot(figsize = (10, 3))
+                    ax = y_train.plot(figsize = (10, 3))
                     y_valid.plot(ax = ax, color = 'tab:blue', alpha = 0.5)
                     y_pred.plot(ax = ax, color = 'tab:orange')
                     ax.set_xlabel(self.date)
@@ -278,7 +280,7 @@ class Forecaster:
                 except:
                     y_train_pred = model_.predict(X_train).flatten()
 
-                y_train_pred[y_train_pred < 0] = 0
+                y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
                 training_score = self.scoring_metric(y_train, y_train_pred)
 
                 forecast_index = df_valid[df_valid[self.target].isna()].index
@@ -309,7 +311,6 @@ class Forecaster:
                         pass
 
                 y_pred_w_id = df_valid.loc[forecast_index, [self.id_, self.target]].copy()
-                y_pred_w_id.loc[y_pred_w_id[self.target] < 0, self.target] = 0
                 y_pred_w_id[self.target] = yscaler.inverse_transform(y_pred_w_id[self.target].values.reshape(-1, 1)).flatten()
 
                 y_pred = y_pred_w_id[self.target]
@@ -320,7 +321,7 @@ class Forecaster:
                 display(scores)
 
                 if plot == True:
-                    ax = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index).plot(figsize = (10, 3))
+                    ax = y_train.plot(figsize = (10, 3))
                     y_valid.plot(ax = ax, color = 'tab:blue', alpha = 0.5)
                     y_pred.plot(ax = ax, color = 'tab:orange')
                     ax.set_xlabel(self.date)
@@ -354,6 +355,12 @@ class Forecaster:
 
                 df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
+                Xscaler = StandardScaler()
+                yscaler = StandardScaler()
+
+                df_valid[df_valid.columns.drop([self.id_, self.target])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.id_, self.target])])
+                df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+
                 X_train = df_valid[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
 
@@ -374,7 +381,10 @@ class Forecaster:
                 except:
                     y_pred = model_.predict(X_valid).flatten()
                 
-                y_pred[y_pred < 0] = 0
+
+                y_pred = yscaler.inverse_transform(y_pred.reshape(-1, 1)).flatten()
+                y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
+
 
                 y_pred_w_id = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred}, index = valid_index)
                 y_pred = y_pred_w_id.sort_values(by = [self.date, self.id_])[self.target]
@@ -384,7 +394,6 @@ class Forecaster:
                 except:
                     y_train_pred = model_.predict(X_train).flatten()
                 
-                y_train_pred[y_train_pred < 0] = 0
                 training_score = self.scoring_metric(y_train, y_train_pred)
                 test_score = self.scoring_metric(y_valid, y_pred)
 
@@ -428,6 +437,12 @@ class Forecaster:
                 df_valid = df_valid_dummy
                 del df_valid_dummy
 
+                Xscaler = StandardScaler()
+                yscaler = StandardScaler()
+
+                df_valid[df_valid.columns.drop([self.id_, self.target, *self.group_features])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.id_, self.target, *self.group_features])])
+                df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+
                 X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
 
@@ -445,7 +460,8 @@ class Forecaster:
                     y_train_pred = model_.predict(X_train, verbose = 0).flatten()
                 except:
                     y_train_pred = model_.predict(X_train).flatten()
-                y_train_pred[y_train_pred < 0] = 0
+
+                y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
                 training_score = self.scoring_metric(y_train, y_train_pred)
 
                 y_pred_w_ids = []
@@ -482,7 +498,8 @@ class Forecaster:
                     y_pred_w_ids.append(df_group.loc[forecast_index, [self.id_, self.target]].copy())
 
                 y_pred_w_id = pd.concat(y_pred_w_ids).sort_values(by = [self.date, self.id_])
-                y_pred_w_id.loc[y_pred_w_id[self.target] < 0, self.target] = 0
+
+                y_pred_w_id[self.target] = yscaler.inverse_transform(y_pred_w_id[self.target].values.reshape(-1, 1)).flatten()
 
                 y_pred = y_pred_w_id[self.target]
 
@@ -538,9 +555,14 @@ class Forecaster:
 
                     df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
+                    Xscaler = StandardScaler()
+                    yscaler = StandardScaler()
+
+                    df_valid[df_valid.columns.drop([self.id_, self.target])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.id_, self.target])])
+                    df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+
                     X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
-                    y_trains.append(y_train)
 
                     X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
                     valid_index = X_valid.index
@@ -560,7 +582,10 @@ class Forecaster:
                         y_pred_ = models[group[0]].predict(X_valid, verbose = 0).flatten()
                     except:
                         y_pred_ = models[group[0]].predict(X_valid).flatten()
-                    y_pred_[y_pred_ < 0] = 0
+
+                    y_pred = yscaler.inverse_transform(y_pred.reshape(-1, 1)).flatten()
+                    y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
+                    y_trains.append(y_train)
 
                     y_pred_w_id_ = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred_}, index = valid_index)
                     y_pred_w_ids.append(y_pred_w_id_)
@@ -571,7 +596,7 @@ class Forecaster:
                         y_train_pred = models[group[0]].predict(X_train, verbose = 0).flatten()
                     except:
                         y_train_pred = models[group[0]].predict(X_train).flatten()
-                    y_train_pred[y_train_pred < 0] = 0
+
                     training_scores[group[0]] = (self.scoring_metric(y_train, y_train_pred))
                     test_scores[group[0]] = (self.scoring_metric(y_valid, y_pred_))
 
@@ -592,9 +617,14 @@ class Forecaster:
 
                     df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
+                    Xscaler = StandardScaler()
+                    yscaler = StandardScaler()
+
+                    df_valid[df_valid.columns.drop([self.id_, self.target])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.id_, self.target])])
+                    df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+
                     X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
-                    y_trains.append(y_train)
 
                     X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
 
@@ -614,7 +644,10 @@ class Forecaster:
                         y_train_pred = models[group[0]].predict(X_train, verbose = 0).flatten()
                     except:
                         y_train_pred = models[group[0]].predict(X_train).flatten()
-                    y_train_pred[y_train_pred < 0] = 0
+
+
+                    y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
+                    y_trains.append(y_train)
                     training_scores[group[0]] = self.scoring_metric(y_train, y_train_pred)
 
                     forecast_index = df_valid[df_valid[self.target].isna()].index
@@ -643,7 +676,8 @@ class Forecaster:
                             pass
 
                     y_pred_w_id_ = df_valid.loc[forecast_index, [self.id_, self.target]].copy()
-                    y_pred_w_id_.loc[y_pred_w_id_[self.target] < 0, self.target] = 0
+
+                    y_pred_w_id_[self.target] = yscaler.inverse_transform(y_pred_w_id_[self.target].values.reshape(-1, 1)).flatten()
 
                     y_pred_ = y_pred_w_id_[self.target]
 
@@ -714,9 +748,14 @@ class Forecaster:
 
                     df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
+                    Xscaler = StandardScaler()
+                    yscaler = StandardScaler()
+
+                    df_valid[df_valid.columns.drop([self.id_, self.target])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.id_, self.target])])
+                    df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+
                     X_train = df_valid.drop(columns = by)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = by)[df_valid[self.target].notna()][self.target]
-                    y_trains.append(y_train)
 
                     X_valid = df_valid.drop(columns = by)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
                     valid_index = X_valid.index
@@ -736,7 +775,11 @@ class Forecaster:
                         y_pred_ = models[group[0]].predict(X_valid, verbose = 0).flatten()
                     except:
                         y_pred_ = models[group[0]].predict(X_valid).flatten()
-                    y_pred_[y_pred_ < 0] = 0
+
+
+                    y_pred = yscaler.inverse_transform(y_pred.reshape(-1, 1)).flatten()
+                    y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
+                    y_trains.append(y_train)
 
                     y_pred_w_id_ = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred_}, index = valid_index)
                     y_pred_ = y_pred_w_id_.sort_values(by = [self.date, self.id_])[self.target]
@@ -748,7 +791,7 @@ class Forecaster:
                         y_train_pred = models[group[0]].predict(X_train, verbose = 0).flatten()
                     except:
                         y_train_pred = models[group[0]].predict(X_train).flatten()
-                    y_train_pred[y_train_pred < 0] = 0
+
                     training_scores[group[0]] = self.scoring_metric(y_train, y_train_pred)
                     test_scores[group[0]] = self.scoring_metric(y_valid, y_pred_)
 
@@ -775,9 +818,14 @@ class Forecaster:
                     df_valid = df_valid_dummy
                     del df_valid_dummy
 
+                    Xscaler = StandardScaler()
+                    yscaler = StandardScaler()
+
+                    df_valid[df_valid.columns.drop([self.id_, self.target, *gr_2])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.id_, self.target, *gr_2])])
+                    df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+
                     X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
-                    y_trains.append(y_train)
 
                     if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                         X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
@@ -793,7 +841,11 @@ class Forecaster:
                         y_train_pred = models[group[0]].predict(X_train, verbose = 0).flatten()
                     except:
                         y_train_pred = models[group[0]].predict(X_train).flatten()
-                    y_train_pred[y_train_pred < 0] = 0
+
+                    y_pred_w_id[self.target] = yscaler.inverse_transform(y_pred_w_id[self.target].values.reshape(-1, 1)).flatten()
+                    y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
+                    y_trains.append(y_train)
+
                     training_scores[group[0]] = self.scoring_metric(y_train, y_train_pred)
 
                     y_pred_w_ids_ = []
@@ -831,7 +883,8 @@ class Forecaster:
                         y_pred_w_ids_.append(y_pred_w_id__)
 
                     y_pred_w_id_ = pd.concat(y_pred_w_ids_).sort_values(by = [self.date, self.id_])
-                    y_pred_w_id_.loc[y_pred_w_id_[self.target] < 0, self.target] = 0
+
+                    y_pred_w_id_[self.target] = yscaler.inverse_transform(y_pred_w_id_[self.target].values.reshape(-1, 1)).flatten()
 
                     y_pred_ = y_pred_w_id_[self.target]
 
@@ -925,6 +978,12 @@ class Forecaster:
 
                 df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
+                Xscaler = StandardScaler()
+                yscaler = StandardScaler()
+
+                df_valid[df_valid.columns.drop([self.id_, self.target])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.id_, self.target])])
+                df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+
                 X_train = df_valid[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
 
@@ -946,14 +1005,17 @@ class Forecaster:
                     y_pred = model_.predict(X_valid, verbose = 0).flatten()
                 except:
                     y_pred = model_.predict(X_valid).flatten()
-                y_pred[y_pred < 0] = 0
+
+                y_pred = yscaler.inverse_transform(y_pred.reshape(-1, 1)).flatten()
+                y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
+
                 y_pred = pd.Series(y_pred, index = valid_index)
 
                 try:
                     y_train_pred = model_.predict(X_train, verbose = 0).flatten()
                 except:
                     y_train_pred = model_.predict(X_train).flatten()
-                y_train_pred[y_train_pred < 0] = 0
+
                 training_score = self.scoring_metric(y_train, y_train_pred)
 
                 scores = pd.DataFrame({model_name: [training_score]}, index = ['Training score']).T
@@ -990,6 +1052,12 @@ class Forecaster:
 
                 df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
+                Xscaler = StandardScaler()
+                yscaler = StandardScaler()
+
+                df_valid[df_valid.columns.drop([self.id_, self.target])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.id_, self.target])])
+                df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+
                 X_train = df_valid[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
 
@@ -1007,7 +1075,9 @@ class Forecaster:
                     y_train_pred = model_.predict(X_train, verbose = 0).flatten()
                 except:
                     y_train_pred = model_.predict(X_train).flatten()
-                y_train_pred[y_train_pred < 0] = 0
+
+                y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
+
                 training_score = self.scoring_metric(y_train, y_train_pred)
 
                 forecast_index = df_valid[df_valid[self.target].isna()].index
@@ -1036,8 +1106,9 @@ class Forecaster:
                         pass
 
                 y_pred_w_id = df_valid.loc[forecast_index, [self.id_, self.target]].copy()
-                y_pred_w_id.loc[y_pred_w_id[self.target] < 0, self.target] = 0
 
+                y_pred_w_id[self.target] = yscaler.inverse_transform(y_pred_w_id[self.target].values.reshape(-1, 1)).flatten()
+               
                 y_pred = y_pred_w_id[self.target]
 
                 scores = pd.DataFrame({model_name: [training_score]}, index = ['Training score']).T
@@ -1076,6 +1147,12 @@ class Forecaster:
 
                 df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
+                Xscaler = StandardScaler()
+                yscaler = StandardScaler()
+
+                df_valid[df_valid.columns.drop([self.id_, self.target])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.id_, self.target])])
+                df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+
                 X_train = df_valid[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
 
@@ -1097,7 +1174,9 @@ class Forecaster:
                     y_pred = model_.predict(X_valid, verbose = 0).flatten()
                 except:
                     y_pred = model_.predict(X_valid).flatten()
-                y_pred[y_pred < 0] = 0
+
+                y_pred = yscaler.inverse_transform(y_pred.reshape(-1, 1)).flatten()
+                y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
 
                 y_pred_w_id = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred}, index = valid_index)
                 y_pred = y_pred_w_id.sort_values(by = [self.date, self.id_])[self.target]
@@ -1107,7 +1186,6 @@ class Forecaster:
                 except:
                     y_train_pred = model_.predict(X_train).flatten()
                 
-                y_train_pred[y_train_pred < 0] = 0
                 training_score = self.scoring_metric(y_train, y_train_pred)
 
                 scores = pd.DataFrame({model_name: [training_score]}, index = ['Training score']).T
@@ -1148,6 +1226,12 @@ class Forecaster:
                 df_valid = df_valid_dummy
                 del df_valid_dummy
 
+                Xscaler = StandardScaler()
+                yscaler = StandardScaler()
+
+                df_valid[df_valid.columns.drop([self.id_, self.target, *self.group_features])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.id_, self.target, *self.group_features])])
+                df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+
                 X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                 y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
                 if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
@@ -1164,7 +1248,9 @@ class Forecaster:
                     y_train_pred = model_.predict(X_train, verbose = 0).flatten()
                 except:
                     y_train_pred = model_.predict(X_train).flatten()
-                y_train_pred[y_train_pred < 0] = 0
+                
+                y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
+               
                 training_score = self.scoring_metric(y_train, y_train_pred)
 
                 y_pred_w_ids = []
@@ -1201,7 +1287,8 @@ class Forecaster:
                     y_pred_w_ids.append(df_group.loc[forecast_index, [self.id_, self.target]].copy())
 
                 y_pred_w_id = pd.concat(y_pred_w_ids).sort_values(by = [self.date, self.id_])
-                y_pred_w_id.loc[y_pred_w_id[self.target] < 0, self.target] = 0
+
+                y_pred_w_id[self.target] = yscaler.inverse_transform(y_pred_w_id[self.target].values.reshape(-1, 1)).flatten()
 
                 y_pred = y_pred_w_id[self.target]
 
@@ -1252,9 +1339,14 @@ class Forecaster:
 
                     df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
+                    Xscaler = StandardScaler()
+                    yscaler = StandardScaler()
+
+                    df_valid[df_valid.columns.drop([self.id_, self.target])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.id_, self.target])])
+                    df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+
                     X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
-                    y_trains.append(y_train)
 
                     X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
                     valid_index = X_valid.index
@@ -1274,7 +1366,10 @@ class Forecaster:
                         y_pred_ = models[group[0]].predict(X_valid, verbose = 0).flatten()
                     except:
                         y_pred_ = models[group[0]].predict(X_valid).flatten()
-                    y_pred_[y_pred_ < 0] = 0
+
+                    y_pred = yscaler.inverse_transform(y_pred.reshape(-1, 1)).flatten()
+                    y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
+                    y_trains.append(y_train)
 
                     y_pred_w_id_ = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred_}, index = valid_index)
                     y_pred_w_ids.append(y_pred_w_id_)
@@ -1285,7 +1380,7 @@ class Forecaster:
                         y_train_pred = models[group[0]].predict(X_train, verbose = 0).flatten()
                     except:
                         y_train_pred = models[group[0]].predict(X_train).flatten()
-                    y_train_pred[y_train_pred < 0] = 0
+
                     training_scores[group[0]] = (self.scoring_metric(y_train, y_train_pred))
 
                 if lag != False:
@@ -1305,9 +1400,15 @@ class Forecaster:
 
                     df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
+                    Xscaler = StandardScaler()
+                    yscaler = StandardScaler()
+
+                    df_valid[df_valid.columns.drop([self.id_, self.target])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.id_, self.target])])
+                    df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+
                     X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
-                    y_trains.append(y_train)
+                    
 
                     X_valid = df_valid.drop(columns = self.group_features)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
 
@@ -1327,8 +1428,10 @@ class Forecaster:
                         y_train_pred = models[group[0]].predict(X_train, verbose = 0).flatten()
                     except:
                         y_train_pred = models[group[0]].predict(X_train).flatten()
-                    
-                    y_train_pred[y_train_pred < 0] = 0
+
+                    y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
+                    y_trains.append(y_train)
+                                   
                     training_scores[group[0]] = self.scoring_metric(y_train, y_train_pred)
 
                     forecast_index = df_valid[df_valid[self.target].isna()].index
@@ -1357,7 +1460,8 @@ class Forecaster:
                             pass
 
                     y_pred_w_id_ = df_valid.loc[forecast_index, [self.id_, self.target]].copy()
-                    y_pred_w_id_.loc[y_pred_w_id_[self.target] < 0, self.target] = 0
+
+                    y_pred_w_id[self.target] = yscaler.inverse_transform(y_pred_w_id[self.target].values.reshape(-1, 1)).flatten()
 
                     y_pred_ = y_pred_w_id_[self.target]
 
@@ -1420,9 +1524,14 @@ class Forecaster:
 
                     df_valid = pd.get_dummies(df_valid, columns = dummy_vars)
 
+                    Xscaler = StandardScaler()
+                    yscaler = StandardScaler()
+
+                    df_valid[df_valid.columns.drop([self.id_, self.target])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.id_, self.target])])
+                    df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+
                     X_train = df_valid.drop(columns = by)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = by)[df_valid[self.target].notna()][self.target]
-                    y_trains.append(y_train)
 
                     X_valid = df_valid.drop(columns = by)[df_valid[self.target].isna()].drop(columns = [self.target, self.id_])
                     valid_index = X_valid.index
@@ -1443,7 +1552,10 @@ class Forecaster:
                         y_pred_ = models[group[0]].predict(X_valid, verbose = 0).flatten()
                     except:
                         y_pred_ = models[group[0]].predict(X_valid).flatten()
-                    y_pred_[y_pred_ < 0] = 0
+
+                    y_pred = yscaler.inverse_transform(y_pred.reshape(-1, 1)).flatten()
+                    y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
+                    y_trains.append(y_train)
 
                     y_pred_w_id_ = pd.DataFrame({self.id_: X_valid[self.id_], self.target: y_pred_}, index = valid_index)
                     y_pred_ = y_pred_w_id_.sort_values(by = [self.date, self.id_])[self.target]
@@ -1455,7 +1567,7 @@ class Forecaster:
                         y_train_pred = models[group[0]].predict(X_train, verbose = 0).flatten()
                     except:
                         y_train_pred = models[group[0]].predict(X_train).flatten()
-                    y_train_pred[y_train_pred < 0] = 0
+
                     training_scores[group[0]] = self.scoring_metric(y_train, y_train_pred)
 
                 if lag != False:
@@ -1481,9 +1593,15 @@ class Forecaster:
                     df_valid = df_valid_dummy
                     del df_valid_dummy
 
+                    Xscaler = StandardScaler()
+                    yscaler = StandardScaler()
+
+                    df_valid[df_valid.columns.drop([self.id_, self.target])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.id_, self.target])])
+                    df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+
                     X_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()].drop(columns = [self.target, self.id_])
                     y_train = df_valid.drop(columns = self.group_features)[df_valid[self.target].notna()][self.target]
-                    y_trains.append(y_train)
+
                     if 'LSTM' in str(model_name) or 'GRU' in str(model_name):
                         X_train = np.reshape(X_train.values, (X_train.shape[0], 1, X_train.shape[1]))
 
@@ -1498,7 +1616,10 @@ class Forecaster:
                         y_train_pred = models[group[0]].predict(X_train, verbose = 0).flatten()
                     except:
                         y_train_pred = models[group[0]].predict(X_train).flatten()
-                    y_train_pred[y_train_pred < 0] = 0
+
+                    y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
+                    y_trains.append(y_train)
+               
                     training_scores[group[0]] = self.scoring_metric(y_train, y_train_pred)
 
                     y_pred_w_ids_ = []
@@ -1536,7 +1657,8 @@ class Forecaster:
                         y_pred_w_ids_.append(y_pred_w_id__)
 
                     y_pred_w_id_ = pd.concat(y_pred_w_ids_).sort_values(by = [self.date, self.id_])
-                    y_pred_w_id_.loc[y_pred_w_id_[self.target] < 0, self.target] = 0
+
+                    y_pred_w_id_[self.target] = yscaler.inverse_transform(y_pred_w_id_[self.target].values.reshape(-1, 1)).flatten()
 
                     y_pred_ = y_pred_w_id_[self.target]
 
