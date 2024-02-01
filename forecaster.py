@@ -399,7 +399,6 @@ class Forecaster:
                     ax = y_train.reset_index().groupby(self.date).mean().plot(figsize = (10, 3), label='Original data')
                     y_valid.reset_index().groupby(self.date).mean().plot(ax = ax, color = 'tab:blue', alpha = 0.5, label=None)
                     y_pred.reset_index().groupby(self.date).mean().plot(ax = ax, color = 'tab:orange', label='Prediction')
-                    y_train_pred.reset_index().groupby(self.date).mean().plot(ax = ax, color = 'tab:orange', label='Training Pred')
                     ax.set_xlabel(self.date)
                     ax.set_ylabel(self.target)
                     handles, labels = ax.get_legend_handles_labels()
