@@ -114,10 +114,10 @@ class Forecaster:
         dates = data.index.unique()
         n = len(dates)
         split_date = dates[int(n*split)]
-
+        #split_date = data[data['size']==-1].index.unique().min()
         X_valid = data[data[self.target].notna()]
 
-        y_valid = X_valid.loc[split_date:].sort_values(by = [self.date])[self.target].copy()
+        y_valid = X_valid.loc[split_date:][self.target].copy()
         X_valid.loc[split_date:, self.target] = np.nan
 
         return X_valid, y_valid
@@ -129,7 +129,8 @@ class Forecaster:
         lag = False, 
         by = None, 
         plot = False, 
-        fit_kwargs = {}
+        fit_kwargs = {},
+        split = 0.7
     ):
 
         data = self.df[self.df[self.target].notna()].copy()
@@ -161,7 +162,7 @@ class Forecaster:
             model_name = str(model).split("(")[0]
 
         if len(self.group_features) == 0:
-            df_valid , y_valid = self.train_valid_split(data.set_index(self.date))
+            df_valid , y_valid = self.train_valid_split(data.set_index(self.date), split = split)
 
             if seasonality:
                 df_valid = self.create_seasonality(df_valid)
@@ -331,7 +332,7 @@ class Forecaster:
                 return y_pred.reset_index(), scores
 
         if by == None and len(self.group_features):
-            df_valid , y_valid = self.train_valid_split(data.set_index(self.date))
+            df_valid , y_valid = self.train_valid_split(data.set_index(self.date), split = split)
 
             if seasonality:
                 df_valid = self.create_seasonality(df_valid)
@@ -353,9 +354,10 @@ class Forecaster:
 
                 Xscaler = StandardScaler()
                 yscaler = StandardScaler()
-
+                yscaler.fit(data.dropna()[self.target].values.reshape(-1, 1))
                 df_valid[df_valid.columns.drop([self.target])] = Xscaler.fit_transform(df_valid[df_valid.columns.drop([self.target])])
-                df_valid[self.target] = yscaler.fit_transform(df_valid[self.target].values.reshape(-1, 1)).flatten()
+                df_valid[self.target] = yscaler.transform(df_valid[self.target].values.reshape(-1, 1), copy=1).flatten()
+                y_valid_scaled = yscaler.transform(y_valid.values.reshape(-1, 1), copy=1).flatten()
 
                 X_train = df_valid[df_valid[self.target].notna()].drop(columns = [self.target])
                 y_train = df_valid[df_valid[self.target].notna()][self.target]
@@ -370,45 +372,46 @@ class Forecaster:
                     X_train = np.reshape(X_train.values, (X_train.shape[0], X_train.shape[1], 1))
                     X_valid = np.reshape(X_valid.values, (X_valid.shape[0], X_valid.shape[1], 1))            
                 model_ = deepcopy(model)
-                model_.fit(X_train, y_train, **fit_kwargs)
+                history = model_.fit(X_train, y_train, **fit_kwargs)
 
                 try:
                     y_pred = model_.predict(X_valid, verbose = 0).flatten()
                 except:
                     y_pred = model_.predict(X_valid).flatten()
                 
-
-                y_pred = yscaler.inverse_transform(y_pred.reshape(-1, 1)).flatten()
-                y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
-
-                y_pred_w_id = pd.DataFrame({self.target: y_pred}, index = valid_index)
-                y_pred = y_pred_w_id.sort_values(by = [self.date])[self.target]
-
                 try:
                     y_train_pred = model_.predict(X_train, verbose = 0).flatten()
                 except:
                     y_train_pred = model_.predict(X_train).flatten()
-                y_train_pred = pd.Series(y_train_pred, index = y_train.index) 
+
+                training_score_scaled = self.scoring_metric(y_train.values, y_train_pred)
+                test_score_scaled = self.scoring_metric(y_valid_scaled, y_pred)
+
+                #y_pred = pd.Series(yscaler.inverse_transform(y_pred.reshape(-1, 1)).flatten(), index = valid_index)
+                y_pred = pd.Series(y_pred, index = valid_index)
+                y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
+                y_train_pred = pd.Series(yscaler.inverse_transform(y_train_pred.reshape(-1, 1)).flatten(), index = y_train.index)
+                #y_valid = pd.Series(yscaler.inverse_transform(y_valid.values.reshape(-1, 1)).flatten(), index = valid_index)
+
                 training_score = self.scoring_metric(y_train, y_train_pred)
                 test_score = self.scoring_metric(y_valid, y_pred)
 
-                scores = pd.DataFrame({model_name: [training_score, test_score]}, index = ['Training score', 'Test score']).T
-                display(scores)
+                scores = pd.DataFrame({model_name: [training_score, test_score, training_score_scaled, test_score_scaled]}, index = ['Training score', 'Test score', 'Scaled training score', 'Scaled test score'])
 
                 if plot == True:
-                    ax = y_train.reset_index().groupby(self.date).mean().plot(figsize = (10, 3), label='Original data')
+                    ax = y_train.reset_index().groupby(self.date).sum().plot(figsize = (10, 3), label='Original data')
                     y_valid.reset_index().groupby(self.date).mean().plot(ax = ax, color = 'tab:blue', alpha = 0.5, label=None)
-                    y_pred.reset_index().groupby(self.date).mean().plot(ax = ax, color = 'tab:orange', label='Prediction')
+                    y_pred.reset_index().groupby(self.date).sum().plot(ax = ax, color = 'tab:orange', label='Prediction')
                     ax.set_xlabel(self.date)
                     ax.set_ylabel(self.target)
                     handles, labels = ax.get_legend_handles_labels()
                     handles.pop(1)
-                    labels = ['Original data', 'Prediction', 'Training pred']
+                    labels = ['Original data', 'Prediction']
                     ax.legend(handles, labels)
                     plt.tight_layout()
-                    return y_pred.reset_index(), scores, ax
+                    return history, model_, y_pred.reset_index(), scores, ax
                     
-                return y_pred.reset_index(), scores
+                return history, model_, y_pred.reset_index(), scores
 
             if lag != False:
 
@@ -576,7 +579,7 @@ class Forecaster:
                     except:
                         y_pred_ = models[group[0]].predict(X_valid).flatten()
 
-                    y_pred = yscaler.inverse_transform(y_pred.reshape(-1, 1)).flatten()
+                    y_pred_ = yscaler.inverse_transform(y_pred_.reshape(-1, 1)).flatten()
                     y_train = pd.Series(yscaler.inverse_transform(y_train.values.reshape(-1, 1)).flatten(), index = y_train.index)
                     y_trains.append(y_train)
 
